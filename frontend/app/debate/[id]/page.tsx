@@ -18,6 +18,8 @@ export default function DebatePage() {
   const [loading, setLoading] = useState(false)
   const [currentRound, setCurrentRound] = useState(1)
   const [analyses, setAnalyses] = useState<Record<number, ArgumentAnalysis>>({})
+  const [aiOpening, setAiOpening] = useState<string | null>(null)
+  const [aiOpeningLoading, setAiOpeningLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -27,9 +29,24 @@ export default function DebatePage() {
     setCurrentRound(s.rounds.length + 1)
   }, [id])
 
+  // Fetch AI opening if it goes first
+  useEffect(() => {
+    if (!session || !session.aiGoesFirst || session.rounds.length > 0) return
+    setAiOpeningLoading(true)
+    argue({
+      topic: session.topic,
+      user_side: session.userSide,
+      round_number: 1,
+      history: [],
+    }).then(res => {
+      setAiOpening(res.argument)
+    }).catch(console.error)
+      .finally(() => setAiOpeningLoading(false))
+  }, [session?.id])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [session?.rounds])
+  }, [session?.rounds, aiOpening])
 
   async function submitArgument() {
     if (!session || !input.trim() || loading) return
@@ -37,36 +54,33 @@ export default function DebatePage() {
     setInput("")
     setLoading(true)
 
-    const history: Message[] = session.rounds.flatMap(r => [
-      { role: "user" as const, content: r.userArgument },
-      { role: "assistant" as const, content: r.aiArgument },
-    ])
+    const history: Message[] = []
+
+    // If AI went first, prepend its opening to history
+    if (session.aiGoesFirst && aiOpening && session.rounds.length === 0) {
+      history.push({ role: "assistant", content: aiOpening })
+    }
+
+    session.rounds.forEach(r => {
+      history.push({ role: "user" as const, content: r.userArgument })
+      history.push({ role: "assistant" as const, content: r.aiArgument })
+    })
     history.push({ role: "user", content: userContent })
 
     try {
-      const [res, analysis] = await Promise.all([
-        argue({
-          topic: session.topic,
-          user_side: session.userSide,
-          round_number: currentRound,
-          history,
-        }),
-        analyse({
-          topic: session.topic,
-          user_side: session.userSide,
-          round_number: currentRound,
-          argument: userContent,
-        }),
-      ])
-
-      setAnalyses(prev => ({ ...prev, [currentRound]: analysis }))
+      // Only await the debater — analysis runs in background
+      const res = await argue({
+        topic: session.topic,
+        user_side: session.userSide,
+        round_number: currentRound,
+        history,
+      })
 
       const newRound: Round = {
         number: currentRound as 1 | 2 | 3,
         name: ["opening", "rebuttal", "closing"][currentRound - 1] as Round["name"],
         userArgument: userContent,
         aiArgument: res.argument,
-        analysis,
       }
 
       const updatedSession: DebateSession = {
@@ -78,6 +92,16 @@ export default function DebatePage() {
       saveDebate(updatedSession)
       setSession(updatedSession)
       setCurrentRound(prev => prev + 1)
+
+      // Analysis fires in background — panel fades in when ready
+      analyse({
+        topic: session.topic,
+        user_side: session.userSide,
+        round_number: currentRound,
+        argument: userContent,
+      }).then(analysis => {
+        setAnalyses(prev => ({ ...prev, [currentRound]: analysis }))
+      }).catch(console.error)
 
       if (currentRound === 3) {
         setTimeout(() => router.push(`/verdict/${session.id}`), 1200)
@@ -123,6 +147,48 @@ export default function DebatePage() {
 
       {/* Debate thread */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 max-w-3xl w-full mx-auto">
+
+        {/* AI goes first — opening block */}
+        {session.aiGoesFirst && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-zinc-800" />
+              <span className="text-zinc-500 text-xs uppercase tracking-widest">
+                Round 1 — Opening
+              </span>
+              <div className="h-px flex-1 bg-zinc-800" />
+            </div>
+
+            {aiOpeningLoading ? (
+              <div className="flex justify-start">
+                <div className="bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-5 py-4">
+                  <p className="text-xs text-zinc-400 font-medium mb-2">agAInst</p>
+                  <div className="flex gap-1.5 items-center h-5">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"
+                        style={{ animationDelay: `${i * 0.15}s` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : aiOpening ? (
+              <motion.div
+                className="flex justify-start"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                <div className="max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-5 py-4">
+                  <p className="text-xs text-zinc-400 font-medium mb-2">agAInst</p>
+                  <p className="text-zinc-200 text-sm leading-relaxed">{aiOpening}</p>
+                </div>
+              </motion.div>
+            ) : null}
+          </div>
+        )}
+
         <AnimatePresence>
           {session.rounds.map((round, i) => (
             <motion.div
@@ -131,14 +197,16 @@ export default function DebatePage() {
               animate={{ opacity: 1 }}
               className="space-y-4"
             >
-              {/* Round label */}
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-zinc-800" />
-                <span className="text-zinc-500 text-xs uppercase tracking-widest">
-                  Round {round.number} — {ROUND_NAMES[round.number - 1]}
-                </span>
-                <div className="h-px flex-1 bg-zinc-800" />
-              </div>
+              {/* Round label — skip if AI opened and this is round 1 */}
+              {!(session.aiGoesFirst && round.number === 1) && (
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-zinc-800" />
+                  <span className="text-zinc-500 text-xs uppercase tracking-widest">
+                    Round {round.number} — {ROUND_NAMES[round.number - 1]}
+                  </span>
+                  <div className="h-px flex-1 bg-zinc-800" />
+                </div>
+              )}
 
               {/* User bubble */}
               <motion.div
@@ -153,9 +221,9 @@ export default function DebatePage() {
                 </div>
               </motion.div>
 
-              {/* Analysis panel */}
-              {round.analysis && (
-                <AnalysisPanel analysis={round.analysis} round={round.number} />
+              {/* Analysis panel — fades in when ready */}
+              {analyses[round.number] && (
+                <AnalysisPanel analysis={analyses[round.number]} round={round.number} />
               )}
 
               {/* AI bubble */}
@@ -198,8 +266,9 @@ export default function DebatePage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      {currentRound <= 3 && !loading && session.status !== "complete" && (
+      {/* Input — wait for AI opening before showing */}
+      {currentRound <= 3 && !loading && session.status !== "complete" &&
+       (!session.aiGoesFirst || aiOpening) && (
         <motion.div
           className="border-t border-zinc-800 px-6 py-4 max-w-3xl w-full mx-auto"
           initial={{ opacity: 0, y: 10 }}

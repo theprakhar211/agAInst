@@ -21,6 +21,7 @@ export interface DebateSession {
   rounds: Round[]
   status: "setup" | "debating" | "complete"
   createdAt: number
+  aiGoesFirst: boolean
 }
 
 

@@ -26,21 +26,22 @@ export default function Home() {
   const [side, setSide] = useState<Side | "random">("random")
 
   function startDebate() {
-    if (!topic.trim()) return
-    const resolvedSide: Side =
-      side === "random" ? (Math.random() > 0.5 ? "for" : "against") : side
+  if (!topic.trim()) return
+  const resolvedSide: Side =
+    side === "random" ? (Math.random() < 0.5 ? "for" : "against") : side
 
-    const session = {
-      id: crypto.randomUUID(),
-      topic: topic.trim(),
-      userSide: resolvedSide,
-      rounds: [],
-      status: "debating" as const,
-      createdAt: Date.now(),
-    }
-    saveDebate(session)
-    router.push(`/debate/${session.id}`)
+  const session = {
+    id: crypto.randomUUID(),
+    topic: topic.trim(),
+    userSide: resolvedSide,
+    rounds: [],
+    status: "debating" as const,
+    createdAt: Date.now(),
+    aiGoesFirst: Math.random() < 0.5,   // 50/50 who opens
   }
+  saveDebate(session)
+  router.push(`/debate/${session.id}`)
+}
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 py-16">
