@@ -1,6 +1,6 @@
 # backend/routers/debate.py
 from fastapi import APIRouter, HTTPException
-from models.schemas import ArgueRequest, ArgueResponse
+from models.schemas import ArgueRequest, ArgueResponse, AnalyseRequest
 from services.groq_client import chat
 import json
 from models.schemas import JudgeRequest, JudgeResponse
@@ -69,12 +69,51 @@ def judge(req: JudgeRequest):
     )
     messages = [{"role": m.role, "content": m.content} for m in req.history]
 
-    for attempt in range(2):   # retry once if JSON parsing fails
+    for attempt in range(2):
         try:
             raw = chat(system, messages, temperature=0.2)
-            data = json.loads(raw)
+            clean = raw.strip().removeprefix("```json").removeprefix(
+                "```").removesuffix("```").strip()
+            data = json.loads(clean)
             return JudgeResponse(**data)
+        except Exception as e:
+            if attempt == 1:
+                raise HTTPException(status_code=500, detail=str(e))
+
+
+ANALYSER_PROMPT = """You are an expert debate coach analysing a single argument.
+
+Topic: "{topic}"
+Side being argued: {side}
+Round: {round} of 3
+
+Analyse the argument and return ONLY valid JSON, no markdown, no explanation:
+{{
+  "claim_strength": 1-10,
+  "evidence_quality": 1-10,
+  "emotional_vs_logical": "logical" | "emotional" | "balanced",
+  "filler_phrases": ["list any weak qualifiers found like 'I think maybe', 'sort of', 'probably'"],
+  "one_liner_feedback": "one sharp sentence of coaching feedback",
+  "what_ai_noticed": "one sentence on what the AI opponent will likely target in rebuttal"
+}}"""
+
+
+@router.post("/analyse")
+def analyse(req: AnalyseRequest):
+    system = ANALYSER_PROMPT.format(
+        topic=req.topic,
+        side=req.user_side,
+        round=req.round_number
+    )
+    messages = [{"role": "user", "content": req.argument}]
+
+    for attempt in range(2):
+        try:
+            raw = chat(system, messages, temperature=0.3)
+            clean = raw.strip().removeprefix("```json").removeprefix(
+                "```").removesuffix("```").strip()
+            data = json.loads(clean)
+            return data
         except (json.JSONDecodeError, Exception) as e:
             if attempt == 1:
-                raise HTTPException(
-                    status_code=500, detail=f"Judge failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))

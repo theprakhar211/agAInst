@@ -6,7 +6,8 @@ import { motion } from "framer-motion"
 import html2canvas from "html2canvas"
 import { judge } from "@/lib/api"
 import { DebateSession } from "@/lib/types"
-import { getDebate, getVerdict, saveVerdict } from "@/lib/storage"
+import { getDebate, saveDebate, getVerdict, saveVerdict } from "@/lib/storage"
+import jsPDF from "jspdf"
 
 interface Verdict {
   winner: "user" | "ai"
@@ -62,6 +63,79 @@ export default function VerdictPage() {
     link.href = canvas.toDataURL()
     link.click()
   }
+
+  function exportPDF() {
+  if (!session || !verdict) return
+  const doc = new jsPDF()
+  
+  const lineHeight = 8
+  let y = 20
+
+  const addLine = (text: string, size = 11, bold = false) => {
+    doc.setFontSize(size)
+    doc.setFont("helvetica", bold ? "bold" : "normal")
+    const lines = doc.splitTextToSize(text, 170)
+    lines.forEach((line: string) => {
+      if (y > 270) { doc.addPage(); y = 20 }
+      doc.text(line, 20, y)
+      y += lineHeight
+    })
+    y += 2
+  }
+
+ // Header
+  addLine("agAInst — Debate Transcript", 18, true)
+  addLine(`Topic: ${session.topic}`, 13, true)
+  addLine(`Your side: ${session.userSide.toUpperCase()}`, 11)
+  addLine(`Date: ${new Date(session.createdAt).toLocaleDateString()}`, 11)
+  y += 4
+
+  // Rounds
+  const roundNames = ["Opening", "Rebuttal", "Closing"]
+  session.rounds.forEach((round) => {
+    addLine(`Round ${round.number} — ${roundNames[round.number - 1]}`, 13, true)
+    addLine(`You: ${round.userArgument}`, 10)
+    y += 2
+    addLine(`agAInst: ${round.aiArgument}`, 10)
+    y += 4
+  })
+
+  // Verdict
+  y += 4
+  addLine("Verdict", 14, true)
+  addLine(`Winner: ${verdict.winner === "user" ? "You" : "agAInst"}`, 12, true)
+  addLine(`Reasoning: ${verdict.reasoning}`, 10)
+  y += 2
+  addLine("Scores:", 11, true)
+  const labels = ["logic", "evidence", "rebuttal", "clarity"]
+  labels.forEach(label => {
+    addLine(`  ${label}: You ${verdict.user_scores[label]}/10 vs agAInst ${verdict.ai_scores[label]}/10`, 10)
+  })
+  if (verdict.strongest_argument) {
+    y += 2
+    addLine(`Strongest argument: "${verdict.strongest_argument}"`, 10)
+  }
+  if (verdict.fallacies.length > 0) {
+    y += 2
+    addLine(`Fallacies detected: ${verdict.fallacies.join(", ")}`, 10)
+  }
+
+  doc.save(`agAInst-${session.topic.slice(0, 30)}.pdf`)
+}
+
+  function startSideFlip() {
+  if (!session) return
+  const flipped = {
+    id: crypto.randomUUID(),
+    topic: session.topic,
+    userSide: (session.userSide === "for" ? "against" : "for") as "for" | "against",
+    rounds: [],
+    status: "debating" as const,
+    createdAt: Date.now(),
+  }
+  saveDebate(flipped)
+  router.push(`/debate/${flipped.id}`)
+}
 
   if (!session) return null
 
@@ -186,12 +260,25 @@ export default function VerdictPage() {
             </button>
 
             <button
+              onClick={exportPDF}
+              className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition-colors text-sm font-medium"
+            >
+              Export as PDF
+            </button>
+
+            <button
               onClick={() => router.push("/")}
               className="w-full py-4 border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white rounded-xl transition-colors text-sm font-medium"
             >
               Debate another topic
             </button>
 
+            <button
+  onClick={startSideFlip}
+  className="w-full py-4 border border-zinc-700 hover:border-red-500/50 text-zinc-400 hover:text-red-400 rounded-xl transition-colors text-sm font-medium"
+>
+  🔄 Flip sides — argue the other position
+</button>
           </motion.div>
         )}
       </div>

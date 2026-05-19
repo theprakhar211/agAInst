@@ -1,11 +1,11 @@
-// frontend/app/debate/[id]/page.tsx
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { getDebate, saveDebate } from "@/lib/storage"
-import { argue } from "@/lib/api"
-import { DebateSession, Message, Round } from "@/lib/types"
+import { argue, analyse } from "@/lib/api"
+import { DebateSession, Message, Round, ArgumentAnalysis } from "@/lib/types"
+import AnalysisPanel from "@/components/AnalysisPanel"
 
 const ROUND_NAMES = ["Opening", "Rebuttal", "Closing"]
 const CHAR_LIMIT = 400
@@ -17,6 +17,7 @@ export default function DebatePage() {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [currentRound, setCurrentRound] = useState(1)
+  const [analyses, setAnalyses] = useState<Record<number, ArgumentAnalysis>>({})
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -43,18 +44,29 @@ export default function DebatePage() {
     history.push({ role: "user", content: userContent })
 
     try {
-      const res = await argue({
-        topic: session.topic,
-        user_side: session.userSide,
-        round_number: currentRound,
-        history,
-      })
+      const [res, analysis] = await Promise.all([
+        argue({
+          topic: session.topic,
+          user_side: session.userSide,
+          round_number: currentRound,
+          history,
+        }),
+        analyse({
+          topic: session.topic,
+          user_side: session.userSide,
+          round_number: currentRound,
+          argument: userContent,
+        }),
+      ])
+
+      setAnalyses(prev => ({ ...prev, [currentRound]: analysis }))
 
       const newRound: Round = {
         number: currentRound as 1 | 2 | 3,
-        name: ["opening", "rebuttal", "closing"][currentRound - 1] as any,
+        name: ["opening", "rebuttal", "closing"][currentRound - 1] as Round["name"],
         userArgument: userContent,
         aiArgument: res.argument,
+        analysis,
       }
 
       const updatedSession: DebateSession = {
@@ -140,6 +152,11 @@ export default function DebatePage() {
                   <p className="text-zinc-200 text-sm leading-relaxed">{round.userArgument}</p>
                 </div>
               </motion.div>
+
+              {/* Analysis panel */}
+              {round.analysis && (
+                <AnalysisPanel analysis={round.analysis} round={round.number} />
+              )}
 
               {/* AI bubble */}
               <motion.div

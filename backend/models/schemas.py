@@ -40,3 +40,10 @@ class JudgeResponse(BaseModel):
     strongest_argument: str
     reasoning: str
     fallacies: list[str]
+
+
+class AnalyseRequest(BaseModel):
+    topic: str
+    user_side: Literal["for", "against"]
+    round_number: int
+    argument: str

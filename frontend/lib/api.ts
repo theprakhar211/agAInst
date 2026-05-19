@@ -28,3 +28,18 @@ export async function judge(payload: {
   if (!res.ok) throw new Error("Judge request failed")
   return res.json()
 }
+
+export async function analyse(payload: {
+  topic: string
+  user_side: "for" | "against"
+  round_number: number
+  argument: string
+}) {
+  const res = await fetch(`${BASE_URL}/debate/analyse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error("Analyse request failed")
+  return res.json()
+}
