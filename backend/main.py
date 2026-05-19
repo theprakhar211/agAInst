@@ -7,7 +7,10 @@ app = FastAPI(title="agAInst API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # add Vercel URL later
+    allow_origins=[
+        "http://localhost:3000",
+        "https://against-chi.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
