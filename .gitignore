@@ -1,4 +1,3 @@
-# .gitignore (root)
 node_modules/
 .env
 .env.local
