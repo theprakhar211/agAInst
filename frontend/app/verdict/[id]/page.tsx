@@ -132,6 +132,7 @@ export default function VerdictPage() {
     rounds: [],
     status: "debating" as const,
     createdAt: Date.now(),
+    aiGoesFirst: Math.random() < 0.5,   // add this line
   }
   saveDebate(flipped)
   router.push(`/debate/${flipped.id}`)
