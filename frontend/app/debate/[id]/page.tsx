@@ -123,10 +123,14 @@ export default function DebatePage() {
       <div className="border-b border-white/5 px-6 py-4 flex items-center justify-between bg-[#080808]/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push("/")}
-            className="text-zinc-600 hover:text-zinc-400 transition-colors text-sm"
+            onClick={() => {
+              if (confirm("Abandon this debate? Your progress will be saved.")) {
+                router.push("/")
+              }
+            }}
+            className="text-xs text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/30 px-3 py-1.5 rounded-lg transition-all"
           >
-            ←
+            Abandon
           </button>
           <div>
             <p className="text-zinc-600 text-xs mb-0.5">

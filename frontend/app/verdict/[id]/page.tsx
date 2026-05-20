@@ -120,10 +120,20 @@ export default function VerdictPage() {
       <div className="max-w-2xl mx-auto">
 
         {/* Back */}
-        <button onClick={() => router.push("/")}
-          className="text-zinc-600 hover:text-zinc-400 text-sm mb-8 transition-colors flex items-center gap-2">
-          ← New debate
-        </button>
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
+          >
+            ← New debate
+          </button>
+          <button
+            onClick={() => router.push("/history")}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            History →
+          </button>
+        </div>
 
         {/* Topic header */}
         <div className="text-center mb-10">
