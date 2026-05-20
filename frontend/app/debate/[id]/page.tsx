@@ -8,6 +8,11 @@ import { DebateSession, Message, Round, ArgumentAnalysis } from "@/lib/types"
 import AnalysisPanel from "@/components/AnalysisPanel"
 
 const ROUND_NAMES = ["Opening", "Rebuttal", "Closing"]
+const ROUND_HINTS = [
+  "Establish your core position clearly",
+  "Directly address what they just said",
+  "Land your strongest point and summarise",
+]
 const CHAR_LIMIT = 400
 
 export default function DebatePage() {
@@ -29,7 +34,6 @@ export default function DebatePage() {
     setCurrentRound(s.rounds.length + 1)
   }, [id])
 
-  // Fetch AI opening if it goes first
   useEffect(() => {
     if (!session || !session.aiGoesFirst || session.rounds.length > 0) return
     setAiOpeningLoading(true)
@@ -38,9 +42,8 @@ export default function DebatePage() {
       user_side: session.userSide,
       round_number: 1,
       history: [],
-    }).then(res => {
-      setAiOpening(res.argument)
-    }).catch(console.error)
+    }).then(res => setAiOpening(res.argument))
+      .catch(console.error)
       .finally(() => setAiOpeningLoading(false))
   }, [session?.id])
 
@@ -55,12 +58,9 @@ export default function DebatePage() {
     setLoading(true)
 
     const history: Message[] = []
-
-    // If AI went first, prepend its opening to history
     if (session.aiGoesFirst && aiOpening && session.rounds.length === 0) {
       history.push({ role: "assistant", content: aiOpening })
     }
-
     session.rounds.forEach(r => {
       history.push({ role: "user" as const, content: r.userArgument })
       history.push({ role: "assistant" as const, content: r.aiArgument })
@@ -68,7 +68,6 @@ export default function DebatePage() {
     history.push({ role: "user", content: userContent })
 
     try {
-      // Only await the debater — analysis runs in background
       const res = await argue({
         topic: session.topic,
         user_side: session.userSide,
@@ -93,7 +92,6 @@ export default function DebatePage() {
       setSession(updatedSession)
       setCurrentRound(prev => prev + 1)
 
-      // Analysis fires in background — panel fades in when ready
       analyse({
         topic: session.topic,
         user_side: session.userSide,
@@ -104,7 +102,7 @@ export default function DebatePage() {
       }).catch(console.error)
 
       if (currentRound === 3) {
-        setTimeout(() => router.push(`/verdict/${session.id}`), 1200)
+        setTimeout(() => router.push(`/verdict/${session.id}`), 1500)
       }
     } catch (e) {
       console.error(e)
@@ -115,73 +113,83 @@ export default function DebatePage() {
 
   if (!session) return null
   const sideLabel = session.userSide === "for" ? "FOR" : "AGAINST"
+  const charsLeft = CHAR_LIMIT - input.length
+  const charWarning = charsLeft < 60
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col">
+    <main className="min-h-screen bg-[#080808] text-white flex flex-col">
 
       {/* Header */}
-      <div className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
-        <div>
-          <p className="text-zinc-500 text-xs uppercase tracking-widest mb-1">Debating</p>
-          <h2 className="text-white font-semibold text-sm max-w-md truncate">{session.topic}</h2>
+      <div className="border-b border-white/5 px-6 py-4 flex items-center justify-between bg-[#080808]/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push("/")}
+            className="text-zinc-600 hover:text-zinc-400 transition-colors text-sm"
+          >
+            ←
+          </button>
+          <div>
+            <p className="text-zinc-600 text-xs mb-0.5">
+              You argue <span className="text-red-400 font-medium">{sideLabel}</span>
+            </p>
+            <h2 className="text-white font-medium text-sm max-w-sm truncate">{session.topic}</h2>
+          </div>
         </div>
+
+        {/* Round progress */}
         <div className="flex items-center gap-3">
-          <span className="text-xs px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full">
-            You: {sideLabel}
-          </span>
-          <div className="flex gap-1.5">
+          <div className="flex gap-2">
             {[1, 2, 3].map(r => (
-              <motion.div
-                key={r}
-                className={`w-2 h-2 rounded-full ${
-                  r < currentRound ? "bg-red-500" :
-                  r === currentRound ? "bg-white" : "bg-zinc-700"
-                }`}
-                animate={{ scale: r === currentRound ? [1, 1.3, 1] : 1 }}
-                transition={{ duration: 0.4 }}
-              />
+              <div key={r} className="flex flex-col items-center gap-1">
+                <motion.div
+                  className={`w-8 h-1 rounded-full transition-colors ${
+                    r < currentRound ? "bg-red-500" :
+                    r === currentRound ? "bg-white" : "bg-zinc-800"
+                  }`}
+                  animate={{ scaleX: r === currentRound ? [1, 1.05, 1] : 1 }}
+                  transition={{ duration: 0.4 }}
+                />
+                <span className={`text-[10px] ${r <= currentRound ? "text-zinc-400" : "text-zinc-700"}`}>
+                  {ROUND_NAMES[r - 1]}
+                </span>
+              </div>
             ))}
           </div>
         </div>
       </div>
 
       {/* Debate thread */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 max-w-3xl w-full mx-auto">
+      <div className="flex-1 overflow-y-auto px-4 py-8 max-w-2xl w-full mx-auto space-y-8">
 
-        {/* AI goes first — opening block */}
+        {/* AI goes first */}
         {session.aiGoesFirst && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-800" />
-              <span className="text-zinc-500 text-xs uppercase tracking-widest">
-                Round 1 — Opening
-              </span>
-              <div className="h-px flex-1 bg-zinc-800" />
+              <div className="h-px flex-1 bg-zinc-800/60" />
+              <span className="text-zinc-600 text-xs uppercase tracking-widest">Opening — agAInst</span>
+              <div className="h-px flex-1 bg-zinc-800/60" />
             </div>
-
             {aiOpeningLoading ? (
-              <div className="flex justify-start">
-                <div className="bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-5 py-4">
-                  <p className="text-xs text-zinc-400 font-medium mb-2">agAInst</p>
-                  <div className="flex gap-1.5 items-center h-5">
+              <div className="flex gap-3">
+                <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0 mt-1">
+                  <div className="w-2 h-2 bg-zinc-500 rounded-full animate-pulse" />
+                </div>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-5 py-4">
+                  <div className="flex gap-1.5 items-center h-4">
                     {[0, 1, 2].map(i => (
-                      <div
-                        key={i}
-                        className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"
-                        style={{ animationDelay: `${i * 0.15}s` }}
-                      />
+                      <div key={i} className="w-1.5 h-1.5 bg-zinc-600 rounded-full animate-bounce"
+                        style={{ animationDelay: `${i * 0.15}s` }} />
                     ))}
                   </div>
                 </div>
               </div>
             ) : aiOpening ? (
-              <motion.div
-                className="flex justify-start"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-              >
-                <div className="max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-5 py-4">
-                  <p className="text-xs text-zinc-400 font-medium mb-2">agAInst</p>
+              <motion.div className="flex gap-3"
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold text-zinc-400">
+                  A
+                </div>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-5 py-4 max-w-lg">
                   <p className="text-zinc-200 text-sm leading-relaxed">{aiOpening}</p>
                 </div>
               </motion.div>
@@ -191,98 +199,79 @@ export default function DebatePage() {
 
         <AnimatePresence>
           {session.rounds.map((round, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-4"
-            >
-              {/* Round label — skip if AI opened and this is round 1 */}
+            <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+
               {!(session.aiGoesFirst && round.number === 1) && (
                 <div className="flex items-center gap-3">
-                  <div className="h-px flex-1 bg-zinc-800" />
-                  <span className="text-zinc-500 text-xs uppercase tracking-widest">
-                    Round {round.number} — {ROUND_NAMES[round.number - 1]}
+                  <div className="h-px flex-1 bg-zinc-800/60" />
+                  <span className="text-zinc-600 text-xs uppercase tracking-widest">
+                    {ROUND_NAMES[round.number - 1]}
                   </span>
-                  <div className="h-px flex-1 bg-zinc-800" />
+                  <div className="h-px flex-1 bg-zinc-800/60" />
                 </div>
               )}
 
               {/* User bubble */}
-              <motion.div
-                className="flex justify-end"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="max-w-lg bg-red-500/10 border border-red-500/20 rounded-2xl rounded-tr-sm px-5 py-4">
-                  <p className="text-xs text-red-400 font-medium mb-2">You</p>
+              <motion.div className="flex gap-3 flex-row-reverse"
+                initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
+                <div className="w-7 h-7 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold text-red-400">
+                  Y
+                </div>
+                <div className="bg-red-500/8 border border-red-500/15 rounded-2xl rounded-tr-sm px-5 py-4 max-w-lg">
                   <p className="text-zinc-200 text-sm leading-relaxed">{round.userArgument}</p>
                 </div>
               </motion.div>
 
-              {/* Analysis panel — fades in when ready */}
+              {/* Analysis */}
               {analyses[round.number] && (
                 <AnalysisPanel analysis={analyses[round.number]} round={round.number} />
               )}
 
               {/* AI bubble */}
-              <motion.div
-                className="flex justify-start"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-              >
-                <div className="max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-5 py-4">
-                  <p className="text-xs text-zinc-400 font-medium mb-2">agAInst</p>
+              <motion.div className="flex gap-3"
+                initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold text-zinc-400">
+                  A
+                </div>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-5 py-4 max-w-lg">
                   <p className="text-zinc-200 text-sm leading-relaxed">{round.aiArgument}</p>
                 </div>
               </motion.div>
+
             </motion.div>
           ))}
         </AnimatePresence>
 
         {/* Loading */}
         {loading && (
-          <motion.div
-            className="flex justify-start"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-5 py-4">
-              <p className="text-xs text-zinc-400 font-medium mb-2">agAInst</p>
-              <div className="flex gap-1.5 items-center h-5">
+          <motion.div className="flex gap-3"
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold text-zinc-400">
+              A
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-5 py-4">
+              <div className="flex gap-1.5 items-center h-4">
                 {[0, 1, 2].map(i => (
-                  <div
-                    key={i}
-                    className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
+                  <div key={i} className="w-1.5 h-1.5 bg-zinc-600 rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }} />
                 ))}
               </div>
             </div>
           </motion.div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — wait for AI opening before showing */}
+      {/* Input */}
       {currentRound <= 3 && !loading && session.status !== "complete" &&
        (!session.aiGoesFirst || aiOpening) && (
         <motion.div
-          className="border-t border-zinc-800 px-6 py-4 max-w-3xl w-full mx-auto"
+          className="border-t border-white/5 bg-[#080808]/90 backdrop-blur-sm px-4 py-4 max-w-2xl w-full mx-auto"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <div className="flex items-center gap-2 mb-2 justify-between">
-            <span className="text-xs text-zinc-500 uppercase tracking-widest">
-              Round {currentRound} — {ROUND_NAMES[currentRound - 1]}
-            </span>
-            <span className={`text-xs ${input.length > CHAR_LIMIT * 0.9 ? "text-red-400" : "text-zinc-500"}`}>
-              {input.length}/{CHAR_LIMIT}
-            </span>
-          </div>
-          <div className="flex gap-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden focus-within:border-zinc-600 transition-colors">
             <textarea
               value={input}
               onChange={e => setInput(e.target.value.slice(0, CHAR_LIMIT))}
@@ -292,23 +281,31 @@ export default function DebatePage() {
                   submitArgument()
                 }
               }}
-              placeholder={
-                currentRound === 1 ? "Make your opening argument..." :
-                currentRound === 2 ? "Rebut their argument..." :
-                "Make your closing statement..."
-              }
+              placeholder={ROUND_HINTS[currentRound - 1]}
               rows={3}
-              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-red-500 transition-colors resize-none"
+              className="w-full bg-transparent px-5 pt-4 pb-2 text-white placeholder-zinc-600 text-sm focus:outline-none resize-none leading-relaxed"
             />
-            <button
-              onClick={submitArgument}
-              disabled={!input.trim()}
-              className="px-5 bg-red-500 hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
-            >
-              Send
-            </button>
+            <div className="flex items-center justify-between px-5 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 uppercase tracking-widest">
+                  {ROUND_NAMES[currentRound - 1]}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs transition-colors ${charWarning ? "text-red-400" : "text-zinc-600"}`}>
+                  {charsLeft}
+                </span>
+                <button
+                  onClick={submitArgument}
+                  disabled={!input.trim()}
+                  className="px-4 py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-all hover:scale-105 active:scale-95"
+                >
+                  Submit →
+                </button>
+              </div>
+            </div>
           </div>
-          <p className="text-zinc-600 text-xs mt-2">Enter to submit · Shift+Enter for new line</p>
+          <p className="text-zinc-700 text-xs mt-2 text-center">Enter to submit · Shift+Enter for new line</p>
         </motion.div>
       )}
     </main>

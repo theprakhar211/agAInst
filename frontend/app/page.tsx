@@ -1,95 +1,137 @@
-// frontend/app/page.tsx
 "use client"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { Side } from "@/lib/types"
 import { saveDebate } from "@/lib/storage"
 
-const SAMPLE_TOPICS = [
-  { text: "AI will replace programmers", difficulty: "Intermediate" },
-  { text: "Remote work is better than office work", difficulty: "Beginner" },
-  { text: "Social media does more harm than good", difficulty: "Beginner" },
-  { text: "Crypto will replace traditional banking", difficulty: "Hard" },
-  { text: "Nuclear energy is the future of power", difficulty: "Intermediate" },
-  { text: "College degrees are no longer worth it", difficulty: "Intermediate" },
+const TOPICS = [
+  { text: "AI will replace programmers", difficulty: "Intermediate", category: "Tech" },
+  { text: "Remote work is better than office work", difficulty: "Beginner", category: "Career" },
+  { text: "Social media does more harm than good", difficulty: "Beginner", category: "Society" },
+  { text: "Crypto will replace traditional banking", difficulty: "Hard", category: "Finance" },
+  { text: "Nuclear energy is the future of power", difficulty: "Intermediate", category: "Science" },
+  { text: "College degrees are no longer worth it", difficulty: "Intermediate", category: "Education" },
+  { text: "Surveillance capitalism should be illegal", difficulty: "Hard", category: "Ethics" },
+  { text: "Space exploration is a waste of money", difficulty: "Beginner", category: "Science" },
+  { text: "Humans are fundamentally good", difficulty: "Hard", category: "Philosophy" },
 ]
 
 const DIFFICULTY_STYLES: Record<string, string> = {
-  Beginner: "bg-green-100 text-green-800",
-  Intermediate: "bg-yellow-100 text-yellow-800",
-  Hard: "bg-red-100 text-red-800",
+  Beginner: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
+  Intermediate: "text-amber-400 bg-amber-400/10 border-amber-400/20",
+  Hard: "text-red-400 bg-red-400/10 border-red-400/20",
+}
+
+const CATEGORY_STYLES: Record<string, string> = {
+  Tech: "text-blue-400",
+  Career: "text-purple-400",
+  Society: "text-pink-400",
+  Finance: "text-yellow-400",
+  Science: "text-cyan-400",
+  Education: "text-green-400",
+  Ethics: "text-orange-400",
+  Philosophy: "text-violet-400",
 }
 
 export default function Home() {
   const router = useRouter()
   const [topic, setTopic] = useState("")
   const [side, setSide] = useState<Side | "random">("random")
+  const [hoveredTopic, setHoveredTopic] = useState<string | null>(null)
 
   function startDebate() {
-  if (!topic.trim()) return
-  const resolvedSide: Side =
-    side === "random" ? (Math.random() < 0.5 ? "for" : "against") : side
+    if (!topic.trim()) return
+    const resolvedSide: Side =
+      side === "random" ? (Math.random() < 0.5 ? "for" : "against") : side
 
-  const session = {
-    id: crypto.randomUUID(),
-    topic: topic.trim(),
-    userSide: resolvedSide,
-    rounds: [],
-    status: "debating" as const,
-    createdAt: Date.now(),
-    aiGoesFirst: Math.random() < 0.5,   // 50/50 who opens
+    const session = {
+      id: crypto.randomUUID(),
+      topic: topic.trim(),
+      userSide: resolvedSide,
+      rounds: [],
+      status: "debating" as const,
+      createdAt: Date.now(),
+      aiGoesFirst: Math.random() < 0.5,
+    }
+    saveDebate(session)
+    router.push(`/debate/${session.id}`)
   }
-  saveDebate(session)
-  router.push(`/debate/${session.id}`)
-}
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 py-16">
-      <div className="w-full max-w-2xl space-y-10">
+    <main className="min-h-screen bg-[#080808] text-white">
 
-        {/* Header */}
-        <div className="text-center space-y-3">
-          <h1 className="text-5xl font-bold tracking-tight">
-            ag<span className="text-red-500">AI</span>nst
-          </h1>
-          <p className="text-zinc-400 text-lg">
-            Most AI agrees with you. This one won't.
-          </p>
-        </div>
-
-        <div className="flex justify-center mt-2">
+      {/* Nav */}
+      <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
+        <span className="text-lg font-bold tracking-tight">
+          ag<span className="text-red-500">AI</span>nst
+        </span>
         <button
-            onClick={() => router.push("/history")}
-            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          onClick={() => router.push("/history")}
+          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5"
         >
-            View past debates →
+          Past debates
+          <span className="text-zinc-700">→</span>
         </button>
-        </div>
+      </nav>
 
-        {/* Input */}
-        <div className="space-y-4">
+      <div className="max-w-3xl mx-auto px-6 pt-20 pb-32">
+
+        {/* Hero */}
+        <motion.div
+          className="text-center mb-16"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-full px-4 py-1.5 mb-8">
+            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-xs text-red-400 font-medium tracking-wide">AI-powered debate arena</span>
+          </div>
+
+          <h1 className="text-6xl font-bold tracking-tight mb-6 leading-none">
+            Most AI agrees
+            <br />
+            <span className="text-red-500">with you.</span>
+          </h1>
+          <p className="text-zinc-400 text-xl leading-relaxed max-w-lg mx-auto">
+            This one won&apos;t. Pick any topic, choose your side, and go head-to-head with an AI that genuinely pushes back.
+          </p>
+        </motion.div>
+
+        {/* Input card */}
+        <motion.div
+          className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 mb-6 backdrop-blur-sm"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
           <input
             type="text"
             value={topic}
             onChange={e => setTopic(e.target.value)}
             onKeyDown={e => e.key === "Enter" && startDebate()}
             placeholder="Enter any topic to debate..."
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-4 text-white placeholder-zinc-500 text-lg focus:outline-none focus:border-red-500 transition-colors"
+            className="w-full bg-transparent text-white text-lg placeholder-zinc-600 focus:outline-none mb-6 border-b border-zinc-800 pb-4 focus:border-zinc-600 transition-colors"
           />
 
           {/* Side selector */}
-          <div className="flex gap-3">
-            {(["for", "against", "random"] as const).map(s => (
+          <div className="flex gap-2 mb-6">
+            {([
+              { value: "for", label: "I argue for" },
+              { value: "against", label: "I argue against" },
+              { value: "random", label: "🎲 Surprise me" },
+            ] as const).map(opt => (
               <button
-                key={s}
-                onClick={() => setSide(s)}
-                className={`flex-1 py-3 rounded-xl border text-sm font-medium capitalize transition-all ${
-                  side === s
+                key={opt.value}
+                onClick={() => setSide(opt.value)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                  side === opt.value
                     ? "bg-red-500 border-red-500 text-white"
-                    : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                    : "bg-transparent border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                {s === "random" ? "🎲 Random" : `I argue ${s}`}
+                {opt.label}
               </button>
             ))}
           </div>
@@ -97,34 +139,50 @@ export default function Home() {
           <button
             onClick={startDebate}
             disabled={!topic.trim()}
-            className="w-full py-4 bg-red-500 hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-lg rounded-xl transition-colors"
+            className="w-full py-4 bg-red-500 hover:bg-red-600 disabled:opacity-20 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
           >
-            Start Debate
+            Start Debate →
           </button>
-        </div>
+        </motion.div>
 
         {/* Topic suggestions */}
-        <div className="space-y-3">
-          <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest">
-            Try one of these
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <p className="text-xs text-zinc-600 uppercase tracking-widest mb-4 text-center">
+            Or pick a topic
           </p>
           <div className="grid grid-cols-1 gap-2">
-            {SAMPLE_TOPICS.map(t => (
-              <button
+            {TOPICS.map((t, i) => (
+              <motion.button
                 key={t.text}
                 onClick={() => setTopic(t.text)}
-                className="flex items-center justify-between bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg px-4 py-3 text-left transition-colors group"
+                onHoverStart={() => setHoveredTopic(t.text)}
+                onHoverEnd={() => setHoveredTopic(null)}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + i * 0.04 }}
+                className={`flex items-center justify-between px-5 py-3.5 rounded-xl border transition-all text-left ${
+                  hoveredTopic === t.text || topic === t.text
+                    ? "bg-zinc-800 border-zinc-600"
+                    : "bg-zinc-900/30 border-zinc-800/50 hover:border-zinc-700"
+                }`}
               >
-                <span className="text-zinc-300 text-sm group-hover:text-white transition-colors">
-                  {t.text}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_STYLES[t.difficulty]}`}>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-medium ${CATEGORY_STYLES[t.category]}`}>
+                    {t.category}
+                  </span>
+                  <span className="text-zinc-300 text-sm">{t.text}</span>
+                </div>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${DIFFICULTY_STYLES[t.difficulty]}`}>
                   {t.difficulty}
                 </span>
-              </button>
+              </motion.button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
       </div>
     </main>
