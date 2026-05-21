@@ -30,3 +30,19 @@ export function getVerdict(debateId: string) {
     return v ? JSON.parse(v) : null
   } catch { return null }
 }
+
+export function savePvPSession(session: PvPSession) {
+  const all = getAllPvPSessions()
+  const updated = [session, ...all.filter(s => s.id !== session.id)]
+  localStorage.setItem("agAInst_pvp", JSON.stringify(updated.slice(0, 20)))
+}
+
+export function getAllPvPSessions(): PvPSession[] {
+  if (typeof window === "undefined") return []
+  try { return JSON.parse(localStorage.getItem("agAInst_pvp") || "[]") }
+  catch { return [] }
+}
+
+export function getPvPSession(id: string): PvPSession | null {
+  return getAllPvPSessions().find(s => s.id === id) ?? null
+}

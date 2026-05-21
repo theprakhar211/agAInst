@@ -42,3 +42,24 @@ export interface Round {
   aiArgument: string
   analysis?: ArgumentAnalysis   
 }
+
+export interface PvPRound {
+  number: 1 | 2 | 3
+  name: RoundName
+  player1Argument: string
+  player2Argument: string
+  player1Analysis?: ArgumentAnalysis
+  player2Analysis?: ArgumentAnalysis
+}
+
+export interface PvPSession {
+  id: string
+  topic: string
+  player1Side: Side
+  player2Side: Side
+  player1Name: string
+  player2Name: string
+  rounds: PvPRound[]
+  status: "debating" | "complete"
+  createdAt: number
+}

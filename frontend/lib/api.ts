@@ -43,3 +43,19 @@ export async function analyse(payload: {
   if (!res.ok) throw new Error("Analyse request failed")
   return res.json()
 }
+
+export async function pvpJudge(payload: {
+  topic: string
+  p1_name: string
+  p2_name: string
+  p1_side: "for" | "against"
+  history: { role: "user" | "assistant"; content: string }[]
+}) {
+  const res = await fetch(`${BASE_URL}/debate/pvp/judge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error("PvP judge request failed")
+  return res.json()
+}

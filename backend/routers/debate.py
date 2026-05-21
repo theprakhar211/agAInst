@@ -117,3 +117,43 @@ def analyse(req: AnalyseRequest):
         except (json.JSONDecodeError, Exception) as e:
             if attempt == 1:
                 raise HTTPException(status_code=500, detail=str(e))
+
+
+PVP_JUDGE_PROMPT = """You are an impartial debate judge evaluating two human debaters.
+
+Topic: "{topic}"
+Player 1 ({p1_name}) argued: {p1_side}
+Player 2 ({p2_name}) argued: {p2_side}
+
+Return ONLY valid JSON, no markdown:
+{{
+  "winner": "{p1_name}" or "{p2_name}",
+  "player1_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
+  "player2_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
+  "strongest_argument": "quote or paraphrase the single strongest argument made",
+  "reasoning": "2-3 sentences explaining your verdict",
+  "fallacies": ["any logical fallacies detected, or empty array"]
+}}"""
+
+
+@router.post("/pvp/judge")
+def pvp_judge(req: PvPJudgeRequest):
+    p2_side = "against" if req.p1_side == "for" else "for"
+    system = PVP_JUDGE_PROMPT.format(
+        topic=req.topic,
+        p1_name=req.p1_name,
+        p1_side=req.p1_side,
+        p2_name=req.p2_name,
+        p2_side=p2_side,
+    )
+    messages = [{"role": m.role, "content": m.content} for m in req.history]
+
+    for attempt in range(2):
+        try:
+            raw = chat(system, messages, temperature=0.2)
+            clean = raw.strip().removeprefix("```json").removeprefix(
+                "```").removesuffix("```").strip()
+            return json.loads(clean)
+        except Exception as e:
+            if attempt == 1:
+                raise HTTPException(status_code=500, detail=str(e))

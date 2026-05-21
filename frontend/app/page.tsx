@@ -1,9 +1,9 @@
 "use client"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
-import { Side } from "@/lib/types"
-import { saveDebate } from "@/lib/storage"
+import { motion, AnimatePresence } from "framer-motion"
+import { Side, PvPSession } from "@/lib/types"
+import { saveDebate, savePvPSession } from "@/lib/storage"
 
 const TOPICS = [
   { text: "AI will replace programmers", difficulty: "Intermediate", category: "Tech" },
@@ -39,6 +39,9 @@ export default function Home() {
   const [topic, setTopic] = useState("")
   const [side, setSide] = useState<Side | "random">("random")
   const [hoveredTopic, setHoveredTopic] = useState<string | null>(null)
+  const [showPvPSetup, setShowPvPSetup] = useState(false)
+  const [p1Name, setP1Name] = useState("")
+  const [p2Name, setP2Name] = useState("")
 
   function startDebate() {
     if (!topic.trim()) return
@@ -56,6 +59,31 @@ export default function Home() {
     }
     saveDebate(session)
     router.push(`/debate/${session.id}`)
+  }
+
+  function startPvP() {
+    if (!topic.trim()) return
+    setShowPvPSetup(true)
+  }
+
+  function confirmPvP() {
+    if (!p1Name.trim() || !p2Name.trim()) return
+    const resolvedSide: Side =
+      side === "random" ? (Math.random() < 0.5 ? "for" : "against") : side
+
+    const session: PvPSession = {
+      id: crypto.randomUUID(),
+      topic: topic.trim(),
+      player1Side: resolvedSide,
+      player2Side: resolvedSide === "for" ? "against" : "for",
+      player1Name: p1Name.trim(),
+      player2Name: p2Name.trim(),
+      rounds: [],
+      status: "debating",
+      createdAt: Date.now(),
+    }
+    savePvPSession(session)
+    router.push(`/pvp/${session.id}`)
   }
 
   return (
@@ -136,13 +164,22 @@ export default function Home() {
             ))}
           </div>
 
-          <button
-            onClick={startDebate}
-            disabled={!topic.trim()}
-            className="w-full py-4 bg-red-500 hover:bg-red-600 disabled:opacity-20 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
-          >
-            Start Debate →
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={startDebate}
+              disabled={!topic.trim()}
+              className="py-4 bg-red-500 hover:bg-red-600 disabled:opacity-20 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
+              vs AI →
+            </button>
+            <button
+              onClick={startPvP}
+              disabled={!topic.trim()}
+              className="py-4 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-20 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl transition-all border border-zinc-700 hover:border-zinc-500 hover:scale-[1.01] active:scale-[0.99]"
+            >
+              2 Players →
+            </button>
+          </div>
         </motion.div>
 
         {/* Topic suggestions */}
@@ -185,6 +222,75 @@ export default function Home() {
         </motion.div>
 
       </div>
+
+      {/* PvP Setup Modal */}
+      <AnimatePresence>
+        {showPvPSetup && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={e => e.target === e.currentTarget && setShowPvPSetup(false)}
+          >
+            <motion.div
+              className="bg-zinc-900 border border-zinc-700 rounded-2xl p-8 w-full max-w-sm space-y-6"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+            >
+              <div>
+                <h2 className="text-white font-bold text-lg mb-1">2 Player Setup</h2>
+                <p className="text-zinc-500 text-sm truncate">{topic}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-red-400 uppercase tracking-widest mb-1.5 block">
+                    Player 1 · FOR
+                  </label>
+                  <input
+                    value={p1Name}
+                    onChange={e => setP1Name(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && confirmPvP()}
+                    placeholder="Enter name..."
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-red-500/50 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-blue-400 uppercase tracking-widest mb-1.5 block">
+                    Player 2 · AGAINST
+                  </label>
+                  <input
+                    value={p2Name}
+                    onChange={e => setP2Name(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && confirmPvP()}
+                    placeholder="Enter name..."
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-blue-500/50 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPvPSetup(false)}
+                  className="flex-1 py-3 border border-zinc-700 text-zinc-400 rounded-xl text-sm transition-colors hover:border-zinc-500 hover:text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmPvP}
+                  disabled={!p1Name.trim() || !p2Name.trim()}
+                  className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-sm transition-all"
+                >
+                  Start →
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </main>
   )
 }

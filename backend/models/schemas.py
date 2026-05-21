@@ -47,3 +47,11 @@ class AnalyseRequest(BaseModel):
     user_side: Literal["for", "against"]
     round_number: int
     argument: str
+
+
+class PvPJudgeRequest(BaseModel):
+    topic: str
+    p1_name: str
+    p2_name: str
+    p1_side: Literal["for", "against"]
+    history: list[Message]
