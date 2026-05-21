@@ -11,7 +11,12 @@ export async function argue(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error("Argue request failed")
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "No error body details")
+    console.error(`❌ Argue Request Failed (${res.status}):`, errorText)
+    throw new Error("Argue request failed")
+  }
   return res.json()
 }
 
@@ -25,7 +30,12 @@ export async function judge(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error("Judge request failed")
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "No error body details")
+    console.error(`❌ Judge Request Failed (${res.status}):`, errorText)
+    throw new Error("Judge request failed")
+  }
   return res.json()
 }
 
@@ -40,7 +50,12 @@ export async function analyse(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error("Analyse request failed")
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "No error body details")
+    console.error(`❌ Analyse Request Failed (${res.status}):`, errorText)
+    throw new Error("Analyse request failed")
+  }
   return res.json()
 }
 
@@ -56,6 +71,11 @@ export async function pvpJudge(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error("PvP judge request failed")
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "No error body details")
+    console.error(`❌ PvP Judge Request Failed (${res.status}):`, errorText)
+    throw new Error("PvP judge request failed")
+  }
   return res.json()
 }

@@ -1,5 +1,6 @@
 // frontend/lib/storage.ts
 import { DebateSession } from "./types"
+import { PvPSession } from "./types"
 
 const KEY = "agAInst_history"
 

@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from models.schemas import ArgueRequest, ArgueResponse, AnalyseRequest
 from services.groq_client import chat
 import json
-from models.schemas import JudgeRequest, JudgeResponse
+from models.schemas import JudgeRequest, JudgeResponse, PvPJudgeRequest
 
 router = APIRouter()
 
@@ -119,13 +119,14 @@ def analyse(req: AnalyseRequest):
                 raise HTTPException(status_code=500, detail=str(e))
 
 
+# Fixed structural braces here to stop format string crashes!
 PVP_JUDGE_PROMPT = """You are an impartial debate judge evaluating two human debaters.
 
 Topic: "{topic}"
 Player 1 ({p1_name}) argued: {p1_side}
 Player 2 ({p2_name}) argued: {p2_side}
 
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON, no markdown, no wrapping conversational text. Exactly this structure:
 {{
   "winner": "{p1_name}" or "{p2_name}",
   "player1_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
@@ -139,6 +140,7 @@ Return ONLY valid JSON, no markdown:
 @router.post("/pvp/judge")
 def pvp_judge(req: PvPJudgeRequest):
     p2_side = "against" if req.p1_side == "for" else "for"
+
     system = PVP_JUDGE_PROMPT.format(
         topic=req.topic,
         p1_name=req.p1_name,
@@ -151,6 +153,7 @@ def pvp_judge(req: PvPJudgeRequest):
     for attempt in range(2):
         try:
             raw = chat(system, messages, temperature=0.2)
+            # Extracted markdown strip cleanup to make it resilient against code fences
             clean = raw.strip().removeprefix("```json").removeprefix(
                 "```").removesuffix("```").strip()
             return json.loads(clean)
