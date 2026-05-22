@@ -160,3 +160,38 @@ def pvp_judge(req: PvPJudgeRequest):
         except Exception as e:
             if attempt == 1:
                 raise HTTPException(status_code=500, detail=str(e))
+
+
+TRENDING_PROMPT = """You are a debate topic curator. Generate 6 trending, culturally relevant debate topics that people are actively discussing right now in {year}.
+
+Topics should span: Tech, Society, Ethics, Politics, Career, Science.
+
+Return ONLY valid JSON, no markdown:
+{{
+  "topics": [
+    {{"text": "topic here", "category": "Tech", "difficulty": "Intermediate", "why_trending": "one sentence reason"}},
+    ...
+  ]
+}}
+
+Make them specific and debatable — not vague. Good: "Elon Musk's leadership is hurting Tesla". Bad: "Is technology good?".
+Difficulty: Beginner (clear sides), Intermediate (nuanced), Hard (deeply contested)."""
+
+
+@router.get("/trending")
+def trending_topics():
+    from datetime import datetime
+    system = TRENDING_PROMPT.format(year=datetime.now().year)
+    messages = [
+        {"role": "user", "content": "Give me 6 trending debate topics for right now."}]
+
+    for attempt in range(2):
+        try:
+            raw = chat(system, messages, temperature=0.9)
+            clean = raw.strip().removeprefix("```json").removeprefix(
+                "```").removesuffix("```").strip()
+            data = json.loads(clean)
+            return data
+        except Exception as e:
+            if attempt == 1:
+                raise HTTPException(status_code=500, detail=str(e))

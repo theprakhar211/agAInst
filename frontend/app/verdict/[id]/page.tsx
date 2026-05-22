@@ -1,12 +1,13 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { judge } from "@/lib/api"
 import { DebateSession } from "@/lib/types"
 import { getDebate, getVerdict, saveVerdict, saveDebate } from "@/lib/storage"
+import Image from "next/image"
 
 interface Verdict {
   winner: "user" | "ai"
@@ -29,25 +30,62 @@ export default function VerdictPage() {
   const [session, setSession] = useState<DebateSession | null>(null)
   const [verdict, setVerdict] = useState<Verdict | null>(null)
   const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
     const s = getDebate(id as string)
-    if (!s || s.status !== "complete") { router.push("/"); return }
+    if (!s || s.status !== "complete") { 
+      router.push("/")
+      return 
+    }
     setSession(s)
 
     const cached = getVerdict(id as string)
-    if (cached) { setVerdict(cached); setLoading(false); return }
+    if (cached) { 
+      setVerdict(cached)
+      setLoading(false)
+      return 
+    }
 
-    const history = s.rounds.flatMap(r => [
+    // Explicit structural mapping over s.rounds to build the chat payload clean
+    const history = (s.rounds || []).flatMap(r => {
+      const items: { role: "user" | "assistant"; content: string }[] = []
+      if (r.userArgument) items.push({ role: "user", content: r.userArgument })
+      if (r.aiArgument) items.push({ role: "assistant", content: r.aiArgument })
+      return items
+    })
+
+    setApiError(null)
+    judge({ topic: s.topic, user_side: s.userSide, history })
+      .then(v => { 
+        if (v && (v.user_scores || v.winner)) {
+          saveVerdict(id as string, v)
+          setVerdict(v) 
+        } else {
+          throw new Error("Invalid verdict format returned from AI model.")
+        }
+      })
+      .catch(err => {
+        console.error("Deliberation route failed:", err)
+        setApiError("The evaluation AI experienced a temporary connection glitch or JSON timeout. Please try refreshing or click below to retry.")
+      })
+      .finally(() => setLoading(false))
+  }, [id, router])
+
+  // Explicit retry helper so users don't get permanently stuck if the backend AI fails
+  function retryJudge() {
+    if (!session) return
+    setLoading(true)
+    setApiError(null)
+    const history = (session.rounds || []).flatMap(r => [
       { role: "user" as const, content: r.userArgument },
       { role: "assistant" as const, content: r.aiArgument },
     ])
-
-    judge({ topic: s.topic, user_side: s.userSide, history })
+    judge({ topic: session.topic, user_side: session.userSide, history })
       .then(v => { saveVerdict(id as string, v); setVerdict(v) })
-      .catch(console.error)
+      .catch(() => setApiError("The evaluation AI experienced a temporary connection glitch or JSON timeout. Please try refreshing or click below to retry."))
       .finally(() => setLoading(false))
-  }, [id])
+  }
 
   async function shareDebate() {
     if (!shareRef.current) return
@@ -104,7 +142,7 @@ export default function VerdictPage() {
     line(`Winner: ${verdict.winner === "user" ? "You" : "agAInst"}`, 12, true)
     line(`Reasoning: ${verdict.reasoning}`, 10)
     SCORE_LABELS.forEach(l => {
-      line(`${l}: You ${verdict.user_scores[l]}/10 vs agAInst ${verdict.ai_scores[l]}/10`, 10)
+      line(`${l}: You ${(verdict.user_scores?.[l]) ?? 0}/10 vs agAInst ${(verdict.ai_scores?.[l]) ?? 0}/10`, 10)
     })
     if (verdict.strongest_argument) line(`Strongest: "${verdict.strongest_argument}"`, 10)
     doc.save(`agAInst-${session.topic.slice(0, 30)}.pdf`)
@@ -112,31 +150,38 @@ export default function VerdictPage() {
 
   if (!session) return null
 
-  const userTotal = verdict ? SCORE_LABELS.reduce((s, l) => s + verdict.user_scores[l], 0) : 0
-  const aiTotal = verdict ? SCORE_LABELS.reduce((s, l) => s + verdict.ai_scores[l], 0) : 0
+  // Hardened fallback parameters checking to avoid reducer errors on broken inputs
+  const userTotal = verdict && verdict.user_scores ? SCORE_LABELS.reduce((s, l) => s + (verdict.user_scores[l] || 0), 0) : 0
+  const aiTotal = verdict && verdict.ai_scores ? SCORE_LABELS.reduce((s, l) => s + (verdict.ai_scores[l] || 0), 0) : 0
 
   return (
-    <main className="min-h-screen bg-[#080808] text-white px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-
-        {/* Back */}
-        <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
-          >
-            ← New debate
-          </button>
-          <button
-            onClick={() => router.push("/history")}
-            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-          >
-            History →
-          </button>
+    <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
+      
+      {/* Nav — Exact copy of your main page navbar layout */}
+      <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
+          <Image
+            src="/logo3.png"
+            alt="agAInst logo"
+            width={102}
+            height={102}
+            priority
+            className="rounded-lg"
+          />
         </div>
+        <button
+          onClick={() => router.push("/history")}
+          className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
+        >
+          📚 Past debates
+        </button>
+      </nav>
+
+      {/* Main Container */}
+      <div className="max-w-2xl mx-auto px-4 pt-12 pb-24">
 
         {/* Topic header */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-10 select-none">
           <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">Verdict</p>
           <h1 className="text-2xl font-bold text-white leading-snug">{session.topic}</h1>
           <p className="text-zinc-500 text-sm mt-2">
@@ -144,6 +189,7 @@ export default function VerdictPage() {
           </p>
         </div>
 
+        {/* Loading State Container */}
         {loading && (
           <div className="text-center py-24 space-y-4">
             <div className="w-10 h-10 border-2 border-red-500/50 border-t-red-500 rounded-full animate-spin mx-auto" />
@@ -151,7 +197,25 @@ export default function VerdictPage() {
           </div>
         )}
 
-        {verdict && (
+        {/* Safety Error Card UI fallback if backend Python API route crashes */}
+        {apiError && !loading && (
+          <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 text-center space-y-4 my-12">
+            <div className="text-2xl">⚠️</div>
+            <p className="text-zinc-400 text-sm max-w-md mx-auto leading-relaxed">
+              {apiError}
+            </p>
+            <div className="flex gap-3 justify-center pt-2">
+              <button onClick={retryJudge} className="px-5 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-xs font-medium rounded-lg transition-all text-white">
+                🔄 Retry Evaluation
+              </button>
+              <button onClick={() => router.push("/")} className="px-5 py-2 text-xs text-zinc-500 hover:text-zinc-300 transition-all">
+                Return Home
+              </button>
+            </div>
+          </div>
+        )}
+
+        {verdict && !apiError && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -215,7 +279,7 @@ export default function VerdictPage() {
                     <div className="space-y-3">
                       {SCORE_LABELS.map((label, idx) => {
                         const scores = who === "user" ? verdict.user_scores : verdict.ai_scores
-                        const val = scores[label]
+                        const val = scores ? (scores[label] ?? 0) : 0
                         return (
                           <div key={label}>
                             <div className="flex justify-between items-center mb-1.5">
@@ -241,22 +305,24 @@ export default function VerdictPage() {
               </motion.div>
 
               {/* Strongest argument */}
-              <motion.div
-                className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-              >
-                <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">
-                  ⭐ Strongest argument
-                </p>
-                <p className="text-zinc-300 text-sm leading-relaxed italic">
-                  &ldquo;{verdict.strongest_argument}&rdquo;
-                </p>
-              </motion.div>
+              {verdict.strongest_argument && (
+                <motion.div
+                  className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">
+                    ⭐ Strongest argument
+                  </p>
+                  <p className="text-zinc-300 text-sm leading-relaxed italic">
+                    &ldquo;{verdict.strongest_argument}&rdquo;
+                  </p>
+                </motion.div>
+              )}
 
               {/* Fallacies */}
-              {verdict.fallacies.length > 0 && (
+              {verdict.fallacies && verdict.fallacies.length > 0 && (
                 <motion.div
                   className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-5"
                   initial={{ opacity: 0 }}

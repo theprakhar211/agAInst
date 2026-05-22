@@ -79,3 +79,9 @@ export async function pvpJudge(payload: {
   }
   return res.json()
 }
+
+export async function getTrendingTopics() {
+  const res = await fetch(`${BASE_URL}/debate/trending`)
+  if (!res.ok) throw new Error("Trending fetch failed")
+  return res.json()
+}

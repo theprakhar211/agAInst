@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { getPvPSession, saveDebate } from "@/lib/storage"
 import { PvPSession } from "@/lib/types"
+import Image from "next/image"
 
 const SCORE_LABELS = ["logic", "evidence", "rebuttal", "clarity"]
 const SCORE_ICONS: Record<string, string> = {
@@ -27,19 +28,37 @@ export default function PvPVerdictPage() {
       setVerdict(JSON.parse(cached))
       setLoading(false)
     }
-  }, [id])
+  }, [id, router])
 
   if (!session) return null
 
   return (
-    <main className="min-h-screen bg-[#080808] text-white px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-
-        <button onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all mb-8">
-          ← New debate
+    <main className="min-h-screen bg-[#080808] text-white">
+      
+      {/* Nav — Exact copy of your main page navbar layout */}
+      <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
+          <Image
+            src="/logo3.png"
+            alt="agAInst logo"
+            width={102}
+            height={102}
+            priority
+            className="rounded-lg"
+          />
+        </div>
+        <button
+          onClick={() => router.push("/history")}
+          className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
+        >
+          📚 Past debates
         </button>
+      </nav>
 
+      {/* Main Content Layout Container */}
+      <div className="max-w-2xl mx-auto px-4 pt-12 pb-24">
+
+        {/* Topic header */}
         <div className="text-center mb-10">
           <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">2 Player Verdict</p>
           <h1 className="text-2xl font-bold">{session.topic}</h1>
