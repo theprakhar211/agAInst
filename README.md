@@ -257,7 +257,7 @@ But beyond the demo moment, here's what this project actually demonstrates:
 - [x] 👥 2 Player mode
 - [x] 📸 Shareable result card + PDF export
 - [x] 📚 Local debate history
-- [ ] 🔥 Trending topics via web search
+- [x] 🔥 Trending topics via web search
 - [ ] 👤 User accounts + cloud history
 - [ ] 🏆 Global leaderboard
 - [ ] 🎙️ Voice input support
