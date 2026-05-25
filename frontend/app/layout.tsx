@@ -1,5 +1,8 @@
 import type { Metadata } from "next"
-import "./globals.css"    // ADD THIS LINE
+import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext"
+import { AuthModal } from "@/components/AuthModal"
+import { MigrationRunner } from "@/components/MigrationRunner"
 
 export const metadata: Metadata = {
   title: "agAInst — Challenge Your Thinking",
@@ -9,14 +12,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+          <AuthModal />         {/* global modal, triggered via useAuth().openAuthModal() */}
+          <MigrationRunner />   {/* runs once on first login to push localStorage → cloud */}
+        </AuthProvider>
+      </body>
     </html>
   )
 }

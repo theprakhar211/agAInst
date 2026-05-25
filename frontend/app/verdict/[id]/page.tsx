@@ -6,7 +6,8 @@ import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { judge } from "@/lib/api"
 import { DebateSession } from "@/lib/types"
-import { getDebate, getVerdict, saveVerdict, saveDebate } from "@/lib/storage"
+import { getDebate, getVerdict, saveVerdict, saveDebate } from "@/lib/cloudStorage"
+import { UserMenu } from "@/components/UserMenu"
 import Image from "next/image"
 
 interface Verdict {
@@ -33,43 +34,46 @@ export default function VerdictPage() {
   const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
-    const s = getDebate(id as string)
-    if (!s || s.status !== "complete") { 
-      router.push("/")
-      return 
-    }
-    setSession(s)
+    async function load() {
+      const s = await getDebate(id as string)
+      if (!s || s.status !== "complete") {
+        router.push("/")
+        return
+      }
+      setSession(s)
 
-    const cached = getVerdict(id as string)
-    if (cached) { 
-      setVerdict(cached)
-      setLoading(false)
-      return 
-    }
+      const cached = getVerdict(id as string)
+      if (cached) {
+        setVerdict(cached)
+        setLoading(false)
+        return
+      }
 
-    // Explicit structural mapping over s.rounds to build the chat payload clean
-    const history = (s.rounds || []).flatMap(r => {
-      const items: { role: "user" | "assistant"; content: string }[] = []
-      if (r.userArgument) items.push({ role: "user", content: r.userArgument })
-      if (r.aiArgument) items.push({ role: "assistant", content: r.aiArgument })
-      return items
-    })
-
-    setApiError(null)
-    judge({ topic: s.topic, user_side: s.userSide, history })
-      .then(v => { 
-        if (v && (v.user_scores || v.winner)) {
-          saveVerdict(id as string, v)
-          setVerdict(v) 
-        } else {
-          throw new Error("Invalid verdict format returned from AI model.")
-        }
+      // Explicit structural mapping over s.rounds to build the chat payload clean
+      const history = (s.rounds || []).flatMap(r => {
+        const items: { role: "user" | "assistant"; content: string }[] = []
+        if (r.userArgument) items.push({ role: "user", content: r.userArgument })
+        if (r.aiArgument) items.push({ role: "assistant", content: r.aiArgument })
+        return items
       })
-      .catch(err => {
-        console.error("Deliberation route failed:", err)
-        setApiError("The evaluation AI experienced a temporary connection glitch or JSON timeout. Please try refreshing or click below to retry.")
-      })
-      .finally(() => setLoading(false))
+
+      setApiError(null)
+      judge({ topic: s.topic, user_side: s.userSide, history })
+        .then(v => {
+          if (v && (v.user_scores || v.winner)) {
+            saveVerdict(id as string, v)
+            setVerdict(v)
+          } else {
+            throw new Error("Invalid verdict format returned from AI model.")
+          }
+        })
+        .catch(err => {
+          console.error("Deliberation route failed:", err)
+          setApiError("The evaluation AI experienced a temporary connection glitch or JSON timeout. Please try refreshing or click below to retry.")
+        })
+        .finally(() => setLoading(false))
+    }
+    load()
   }, [id, router])
 
   // Explicit retry helper so users don't get permanently stuck if the backend AI fails
@@ -156,8 +160,8 @@ export default function VerdictPage() {
 
   return (
     <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
-      
-      {/* Nav — Exact copy of your main page navbar layout */}
+
+      {/* Nav */}
       <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
           <Image
@@ -169,12 +173,15 @@ export default function VerdictPage() {
             className="rounded-lg"
           />
         </div>
-        <button
-          onClick={() => router.push("/history")}
-          className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
-        >
-          📚 Past debates
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push("/history")}
+            className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
+          >
+            📚 Past debates
+          </button>
+          <UserMenu />
+        </div>
       </nav>
 
       {/* Main Container */}
@@ -183,15 +190,15 @@ export default function VerdictPage() {
         {/* Topic header */}
         <div className="text-center mb-10 select-none">
           <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">Verdict</p>
-          <h1 className="text-2xl font-bold text-white leading-snug">{session.topic}</h1>
-          <p className="text-zinc-500 text-sm mt-2">
-            You argued <span className="text-red-400 font-medium">{session.userSide.toUpperCase()}</span>
+          <h1 className="text-xl font-bold text-white">{session.topic}</h1>
+          <p className="text-xs text-zinc-600 mt-2">
+            You argued <span className="text-zinc-400 uppercase">{session.userSide}</span>
           </p>
         </div>
 
-        {/* Loading State Container */}
+        {/* Loading spinner */}
         {loading && (
-          <div className="text-center py-24 space-y-4">
+          <div className="flex flex-col items-center gap-4 py-20">
             <div className="w-10 h-10 border-2 border-red-500/50 border-t-red-500 rounded-full animate-spin mx-auto" />
             <p className="text-zinc-500 text-sm">Judge is deliberating...</p>
           </div>

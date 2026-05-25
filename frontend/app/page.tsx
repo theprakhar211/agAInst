@@ -3,9 +3,10 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Side, PvPSession } from "@/lib/types"
-import { saveDebate, savePvPSession } from "@/lib/storage"
+import { saveDebate, savePvPSession } from "@/lib/cloudStorage"
 import Image from "next/image"
 import { getTrendingTopics } from "@/lib/api"
+import { UserMenu } from "@/components/UserMenu"
 
 const TOPICS = [
   { text: "AI will replace programmers", difficulty: "Intermediate", category: "Tech" },
@@ -122,13 +123,15 @@ export default function Home() {
             className="rounded-lg"
           />
         </div>
-        <button
-          onClick={() => router.push("/history")}
-          className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
-        >
-          📚 Past debates
-        </button>
-      </nav>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => router.push("/history")}
+            className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
+          >
+            📚 Past debates
+          </button>
+          <UserMenu /> {/* Adds the Login / Profile dropdown */}
+        </div>
 
       <div className="max-w-3xl mx-auto px-6 pt-20 pb-32">
         
