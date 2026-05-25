@@ -132,6 +132,7 @@ export default function Home() {
           </button>
           <UserMenu /> {/* Adds the Login / Profile dropdown */}
         </div>
+      </nav>
 
       <div className="max-w-3xl mx-auto px-6 pt-20 pb-32">
         
