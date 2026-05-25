@@ -14,7 +14,7 @@ interface AuthContextValue {
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>
-  signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>
+  signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null; alreadyExists: boolean }>
   signOut: () => Promise<void>
   // Modal controls — call these from anywhere
   openAuthModal: (mode?: 'login' | 'signup') => void
