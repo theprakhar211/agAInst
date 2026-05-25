@@ -62,11 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase])
 
   const signUpWithEmail = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email, password,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
-    return { error: error?.message ?? null }
+    // Supabase returns success even for existing emails (anti-enumeration).
+    // Detect it via empty identities array on the returned user.
+    const alreadyExists = !error && data.user && data.user.identities?.length === 0
+    return {
+      error: error?.message ?? null,
+      alreadyExists: alreadyExists ?? false,
+    }
   }, [supabase])
 
   const signOut = useCallback(async () => {

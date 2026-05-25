@@ -36,12 +36,23 @@ export function AuthModal() {
     if (password.length < 6) { setError("Password must be at least 6 characters."); return }
     setSubmitting(true)
     setError(null)
-    const fn = mode === "login" ? signInWithEmail : signUpWithEmail
-    const { error } = await fn(email, password)
-    setSubmitting(false)
-    if (error) { setError(error) }
-    else if (mode === "signup") { setEmailSent(true) }
-    else { closeAuthModal() }
+    if (mode === "login") {
+      const { error } = await signInWithEmail(email, password)
+      setSubmitting(false)
+      if (error) { setError(error) }
+      else { closeAuthModal() }
+    } else {
+      const { error, alreadyExists } = await signUpWithEmail(email, password)
+      setSubmitting(false)
+      if (alreadyExists) {
+        setError("An account with this email already exists.")
+        setMode("login")
+      } else if (error) {
+        setError(error)
+      } else {
+        setEmailSent(true)
+      }
+    }
   }
 
   async function handleGoogle() {
