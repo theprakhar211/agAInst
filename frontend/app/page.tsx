@@ -241,6 +241,15 @@ export default function Home() {
               2 Players →
             </button>
           </div>
+
+          {/* Online PvP */}
+          <button
+            onClick={() => router.push("/online-pvp")}
+            className="w-full py-3.5 mt-2 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-green-500/30 text-zinc-400 hover:text-white rounded-xl transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            Online PvP — debate a real person
+          </button>
         </motion.div>
 
         {/* Topic suggestions */}
