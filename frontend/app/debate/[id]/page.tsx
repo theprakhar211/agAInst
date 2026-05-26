@@ -2,8 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { getDebate } from "@/lib/storage"
-import { saveDebate } from "@/lib/cloudStorage"
+import { getDebate, saveDebate } from "@/lib/cloudStorage"
 import { argue, analyse } from "@/lib/api"
 import { DebateSession, Message, Round, ArgumentAnalysis } from "@/lib/types"
 import AnalysisPanel from "@/components/AnalysisPanel"
@@ -29,10 +28,13 @@ export default function DebatePage() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const s = getDebate(id as string)
-    if (!s) { router.push("/"); return }
-    setSession(s)
-    setCurrentRound(s.rounds.length + 1)
+    async function load() {
+      const s = await getDebate(id as string)
+      if (!s) { router.push("/"); return }
+      setSession(s)
+      setCurrentRound(s.rounds.length + 1)
+    }
+    load()
   }, [id])
 
   useEffect(() => {

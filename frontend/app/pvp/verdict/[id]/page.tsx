@@ -2,9 +2,10 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { getPvPSession, saveDebate } from "@/lib/storage"
+import { getPvPSession } from "@/lib/cloudStorage"
 import { PvPSession } from "@/lib/types"
 import Image from "next/image"
+import { UserMenu } from "@/components/UserMenu"
 
 const SCORE_LABELS = ["logic", "evidence", "rebuttal", "clarity"]
 const SCORE_ICONS: Record<string, string> = {
@@ -47,12 +48,15 @@ export default function PvPVerdictPage() {
             className="rounded-lg"
           />
         </div>
-        <button
-          onClick={() => router.push("/history")}
-          className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
-        >
-          📚 Past debates
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push("/history")}
+            className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
+          >
+            📚 Past debates
+          </button>
+          <UserMenu />
+        </div>
       </nav>
 
       {/* Main Content Layout Container */}

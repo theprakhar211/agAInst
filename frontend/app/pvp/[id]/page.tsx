@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { getPvPSession, savePvPSession } from "@/lib/storage"
+import { getPvPSession, savePvPSession } from "@/lib/cloudStorage"
 import { analyse, pvpJudge } from "@/lib/api"
 import { PvPSession, PvPRound, ArgumentAnalysis } from "@/lib/types"
 
@@ -80,7 +80,7 @@ export default function PvPPage() {
       status: currentRound === 3 ? "complete" : "debating",
     }
 
-    savePvPSession(updatedSession)
+    await savePvPSession(updatedSession)
     setSession(updatedSession)
     setPendingP1Arg(null)
     setIsSubmitting(false)
