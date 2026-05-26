@@ -126,9 +126,11 @@ Topic: "{topic}"
 Player 1 ({p1_name}) argued: {p1_side}
 Player 2 ({p2_name}) argued: {p2_side}
 
+The winner field must be exactly the name of the winning player — either the string "{p1_name}" or the string "{p2_name}". No other value is valid.
+
 Return ONLY valid JSON, no markdown, no wrapping conversational text. Exactly this structure:
 {{
-  "winner": "{p1_name}" or "{p2_name}",
+  "winner": "name of the winning player",
   "player1_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
   "player2_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
   "strongest_argument": "quote or paraphrase the single strongest argument made",
