@@ -2,7 +2,7 @@
 // frontend/app/online-pvp/page.tsx
 // Lobby: create a room or join by code/link
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
@@ -12,7 +12,8 @@ import { createRoom, joinRoom, joinRoomByToken, getPlayerId } from "@/lib/online
 
 type Mode = "home" | "create" | "join"
 
-export default function OnlinePvPPage() {
+// 1. Move all the search parameter operations and UI state inside a separate component
+function LobbyContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
@@ -235,5 +236,18 @@ export default function OnlinePvPPage() {
         </AnimatePresence>
       </div>
     </main>
+  )
+}
+
+// 2. Keep this as your main default export wrapped in a Suspense boundary
+export default function OnlinePvPPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center text-zinc-500 text-sm font-mono">
+        Loading lobby...
+      </div>
+    }>
+      <LobbyContent />
+    </Suspense>
   )
 }
