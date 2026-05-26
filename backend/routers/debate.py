@@ -126,16 +126,16 @@ Topic: "{topic}"
 Player 1 ({p1_name}) argued: {p1_side}
 Player 2 ({p2_name}) argued: {p2_side}
 
-The winner field must be exactly the name of the winning player — either the string "{p1_name}" or the string "{p2_name}". No other value is valid.
+Evaluate who argued better across all 3 rounds. The winner must be either {p1_name} or {p2_name}.
 
-Return ONLY valid JSON, no markdown, no wrapping conversational text. Exactly this structure:
+Return ONLY valid JSON, no markdown, no extra text. Use exactly this structure:
 {{
-  "winner": "name of the winning player",
-  "player1_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
-  "player2_scores": {{"logic": 1-10, "evidence": 1-10, "rebuttal": 1-10, "clarity": 1-10}},
-  "strongest_argument": "quote or paraphrase the single strongest argument made",
-  "reasoning": "2-3 sentences explaining your verdict",
-  "fallacies": ["any logical fallacies detected, or empty array"]
+  "winner": "name of winning player",
+  "player1_scores": {{"logic": 7, "evidence": 6, "rebuttal": 8, "clarity": 7}},
+  "player2_scores": {{"logic": 6, "evidence": 7, "rebuttal": 5, "clarity": 8}},
+  "strongest_argument": "paraphrase the single strongest argument from either player",
+  "reasoning": "2-3 sentences explaining why this player won",
+  "fallacies": []
 }}"""
 
 
@@ -152,16 +152,30 @@ def pvp_judge(req: PvPJudgeRequest):
     )
     messages = [{"role": m.role, "content": m.content} for m in req.history]
 
-    for attempt in range(2):
+    last_error = None
+    for attempt in range(3):
         try:
-            raw = chat(system, messages, temperature=0.2)
-            # Extracted markdown strip cleanup to make it resilient against code fences
-            clean = raw.strip().removeprefix("```json").removeprefix(
-                "```").removesuffix("```").strip()
-            return json.loads(clean)
+            raw = chat(system, messages, temperature=0.2, max_tokens=1200)
+            print(f"[pvp/judge] attempt {attempt+1} raw response: {repr(raw[:200])}")
+
+            if not raw or not raw.strip():
+                raise ValueError("Groq returned empty response")
+
+            # Strip markdown fences robustly
+            clean = raw.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```")[1]
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip()
+
+            data = json.loads(clean)
+            return data
         except Exception as e:
-            if attempt == 1:
-                raise HTTPException(status_code=500, detail=str(e))
+            last_error = e
+            print(f"[pvp/judge] attempt {attempt+1} failed: {e}")
+            if attempt == 2:
+                raise HTTPException(status_code=500, detail=str(last_error))
 
 
 TRENDING_PROMPT = """You are a debate topic curator. Generate 6 trending, culturally relevant debate topics that people are actively discussing right now in {year}.
