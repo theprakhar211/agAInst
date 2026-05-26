@@ -8,7 +8,7 @@ load_dotenv()
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 
-def chat(system_prompt: str, messages: list[dict], temperature: float = 0.8) -> str:
+def chat(system_prompt: str, messages: list[dict], temperature: float = 0.8, max_tokens: int = 1200) -> str:
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -16,6 +16,6 @@ def chat(system_prompt: str, messages: list[dict], temperature: float = 0.8) -> 
             *messages
         ],
         temperature=temperature,
-        max_tokens=600,
+        max_tokens=max_tokens,
     )
     return response.choices[0].message.content

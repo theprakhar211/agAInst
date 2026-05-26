@@ -9,7 +9,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://against-chi.vercel.app",
+        "https://against-debate.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
