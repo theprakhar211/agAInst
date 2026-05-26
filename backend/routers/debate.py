@@ -126,15 +126,16 @@ Topic: "{topic}"
 Player 1 ({p1_name}) argued: {p1_side}
 Player 2 ({p2_name}) argued: {p2_side}
 
-Evaluate who argued better across all 3 rounds. The winner must be either {p1_name} or {p2_name}.
+The conversation history contains the full debate. Evaluate who argued more effectively.
+The winner must be either {p1_name} or {p2_name}.
 
-Return ONLY valid JSON, no markdown, no extra text. Use exactly this structure:
+Return ONLY a raw JSON object. No preamble, no explanation, no markdown. Start your response with {{ and end with }}:
 {{
   "winner": "name of winning player",
   "player1_scores": {{"logic": 7, "evidence": 6, "rebuttal": 8, "clarity": 7}},
   "player2_scores": {{"logic": 6, "evidence": 7, "rebuttal": 5, "clarity": 8}},
   "strongest_argument": "paraphrase the single strongest argument from either player",
-  "reasoning": "2-3 sentences explaining why this player won",
+  "reasoning": "2-3 sentences explaining the verdict",
   "fallacies": []
 }}"""
 
@@ -152,30 +153,34 @@ def pvp_judge(req: PvPJudgeRequest):
     )
     messages = [{"role": m.role, "content": m.content} for m in req.history]
 
+    print(f"[pvp/judge] topic={req.topic!r} messages_count={len(messages)}")
+    for i, m in enumerate(messages):
+        print(f"[pvp/judge] msg[{i}] role={m['role']} content={m['content'][:80]!r}")
+
     last_error = None
     for attempt in range(3):
         try:
             raw = chat(system, messages, temperature=0.2, max_tokens=1200)
-            print(f"[pvp/judge] attempt {attempt+1} raw response: {repr(raw[:200])}")
+            print(f"[pvp/judge] attempt {attempt+1} raw={repr(raw[:300])}")
 
             if not raw or not raw.strip():
-                raise ValueError("Groq returned empty response")
+                raise ValueError("Empty response from Groq")
 
-            # Strip markdown fences robustly
-            clean = raw.strip()
-            if clean.startswith("```"):
-                clean = clean.split("```")[1]
-                if clean.startswith("json"):
-                    clean = clean[4:]
-            clean = clean.strip()
+            # Extract JSON by finding the first { and last }
+            # This handles preamble text before the JSON object
+            start = raw.find('{')
+            end = raw.rfind('}')
+            if start == -1 or end == -1:
+                raise ValueError(f"No JSON object found in response: {raw[:200]}")
 
+            clean = raw[start:end+1]
             data = json.loads(clean)
             return data
         except Exception as e:
             last_error = e
             print(f"[pvp/judge] attempt {attempt+1} failed: {e}")
-            if attempt == 2:
-                raise HTTPException(status_code=500, detail=str(last_error))
+
+    raise HTTPException(status_code=500, detail=str(last_error))
 
 
 TRENDING_PROMPT = """You are a debate topic curator. Generate 6 trending, culturally relevant debate topics that people are actively discussing right now in {year}.
