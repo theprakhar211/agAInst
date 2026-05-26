@@ -49,31 +49,50 @@ export default function OnlinePvPRoomPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [room?.rounds, room?.status])
 
-  // Player 1 triggers judging
+  // Player 1 triggers judging — fetch fresh room to avoid stale rounds
   useEffect(() => {
     if (!room || room.status !== "judging" || !isPlayer1 || judgeTriggered.current) return
     judgeTriggered.current = true
 
-    const history = room.rounds.flatMap(r => [
-      { role: "user" as const, content: `${room.player1_name}: ${r.player1Argument}` },
-      { role: "assistant" as const, content: `${room.player2_name}: ${r.player2Argument}` },
-    ])
+    async function runJudge() {
+      // Always fetch fresh from Supabase so rounds are guaranteed populated
+      const freshRoom = await getRoom(code as string)
+      if (!freshRoom) { console.error("[pvp judge] could not fetch fresh room"); return }
 
-    pvpJudge({
-      topic: room.topic,
-      p1_name: room.player1_name,
-      p2_name: room.player2_name ?? "Player 2",
-      p1_side: room.player1_side,
-      history,
-    }).then(async verdict => {
-      const { getSupabaseClient } = await import("@/lib/supabase")
-      const supabase = getSupabaseClient()
-      await supabase
-        .from("online_pvp_rooms")
-        .update({ verdict, status: "complete" })
-        .eq("code", code)
-    }).catch(console.error)
-  }, [room?.status, isPlayer1, code, room])
+      console.log("[pvp judge] rounds count:", freshRoom.rounds.length)
+      console.log("[pvp judge] rounds:", JSON.stringify(freshRoom.rounds))
+
+      if (freshRoom.rounds.length === 0) {
+        console.error("[pvp judge] rounds still empty after fresh fetch — aborting")
+        return
+      }
+
+      const history = freshRoom.rounds.flatMap(r => [
+        { role: "user" as const, content: `${freshRoom.player1_name}: ${r.player1Argument}` },
+        { role: "assistant" as const, content: `${freshRoom.player2_name}: ${r.player2Argument}` },
+      ])
+
+      try {
+        const verdict = await pvpJudge({
+          topic: freshRoom.topic,
+          p1_name: freshRoom.player1_name,
+          p2_name: freshRoom.player2_name ?? "Player 2",
+          p1_side: freshRoom.player1_side,
+          history,
+        })
+        const { getSupabaseClient } = await import("@/lib/supabase")
+        const supabase = getSupabaseClient()
+        await supabase
+          .from("online_pvp_rooms")
+          .update({ verdict, status: "complete" })
+          .eq("code", code)
+      } catch (e) {
+        console.error("[pvp judge] judge call failed:", e)
+      }
+    }
+
+    runJudge()
+  }, [room?.status, isPlayer1, code])
 
   // Redirect both players to verdict when complete
   useEffect(() => {
