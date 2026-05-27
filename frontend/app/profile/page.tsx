@@ -1,13 +1,13 @@
 "use client"
 // frontend/app/profile/page.tsx
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import { useAuth } from "@/context/AuthContext"
 import { UserMenu } from "@/components/UserMenu"
-import { getAllDebates } from "@/lib/cloudStorage"
+import { getSupabaseClient } from "@/lib/supabase"
 import { DebateSession } from "@/lib/types"
 
 interface Verdict {
@@ -31,29 +31,119 @@ export default function ProfilePage() {
   const { user, loading: authLoading, openAuthModal } = useAuth()
   const [debates, setDebates] = useState<DebateWithVerdict[]>([])
   const [loading, setLoading] = useState(true)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Load avatar from user metadata
+  useEffect(() => {
+    if (user?.user_metadata?.avatar_url) {
+      setAvatarUrl(user.user_metadata.avatar_url)
+    }
+  }, [user])
+
+  // Load debates + verdicts directly from Supabase (not localStorage)
   useEffect(() => {
     if (authLoading) return
     if (!user) { setLoading(false); return }
 
-    getAllDebates().then(sessions => {
-      const completed = sessions.filter(s => s.status === "complete")
-      const withVerdicts: DebateWithVerdict[] = completed.map(session => {
-        try {
-          const raw = localStorage.getItem(`verdict_${session.id}`)
-          const verdict: Verdict | null = raw ? JSON.parse(raw) : null
-          const total = verdict?.user_scores
-            ? SCORE_LABELS.reduce((sum, l) => sum + (verdict.user_scores[l] ?? 0), 0)
-            : 0
-          return { session, verdict, total }
-        } catch {
-          return { session, verdict: null, total: 0 }
+    async function load() {
+      const supabase = getSupabaseClient()
+
+      const { data, error } = await supabase
+        .from('debates')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('status', 'complete')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error || !data) {
+        console.error('[profile] failed to load debates:', error?.message)
+        setLoading(false)
+        return
+      }
+
+      const withVerdicts: DebateWithVerdict[] = data.map(row => {
+        const session: DebateSession = {
+          id: row.id,
+          topic: row.topic,
+          userSide: row.user_side as DebateSession['userSide'],
+          rounds: (row.rounds as DebateSession['rounds']) ?? [],
+          status: row.status as DebateSession['status'],
+          createdAt: row.created_at,
+          aiGoesFirst: row.ai_goes_first ?? false,
         }
+
+        const verdict = row.verdict as Verdict | null
+        const total = verdict?.user_scores
+          ? SCORE_LABELS.reduce((sum, l) => sum + (verdict.user_scores[l] ?? 0), 0)
+          : 0
+
+        // Also mirror to localStorage so verdict page still works
+        if (verdict) {
+          try { localStorage.setItem(`verdict_${row.id}`, JSON.stringify(verdict)) } catch { /* quota */ }
+        }
+
+        return { session, verdict, total }
       })
+
       setDebates(withVerdicts)
       setLoading(false)
-    })
+    }
+
+    load()
   }, [authLoading, user])
+
+  // ── Avatar upload ───────────────────────────────────────────
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    // Validate
+    if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return }
+    if (file.size > 2 * 1024 * 1024) { alert('Image must be under 2MB.'); return }
+
+    setAvatarUploading(true)
+
+    try {
+      const supabase = getSupabaseClient()
+      const ext = file.name.split('.').pop()
+      const path = `avatars/${user.id}.${ext}`
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(path)
+
+      // Update user metadata
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl }
+      })
+
+      if (updateError) throw updateError
+
+      // Update profiles table too
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id)
+
+      setAvatarUrl(publicUrl)
+    } catch (err: any) {
+      console.error('[profile] avatar upload failed:', err)
+      alert('Failed to upload avatar. Make sure the avatars storage bucket exists in Supabase.')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
 
   // ── Computed stats ──────────────────────────────────────────
   const withScores = debates.filter(d => d.verdict !== null)
@@ -64,26 +154,19 @@ export default function ProfilePage() {
     ? Math.round(withScores.reduce((sum, d) => sum + d.total, 0) / withScores.length * 10) / 10
     : 0
 
-  // Per-category averages
   const avgPerCategory = SCORE_LABELS.map(label => {
-    const vals = withScores
-      .map(d => d.verdict?.user_scores?.[label] ?? 0)
-      .filter(v => v > 0)
+    const vals = withScores.map(d => d.verdict?.user_scores?.[label] ?? 0).filter(v => v > 0)
     const avg = vals.length > 0
       ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10
       : 0
     return { label, avg }
   })
 
-  // Best debate (highest score)
   const bestDebate = withScores.length > 0
     ? withScores.reduce((best, d) => d.total > best.total ? d : best)
     : null
 
-  // Recent 5
-  const recent = [...debates]
-    .sort((a, b) => b.session.createdAt - a.session.createdAt)
-    .slice(0, 5)
+  const recent = [...debates].slice(0, 5)
 
   const displayName = user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "Debater"
   const initials = displayName.slice(0, 2).toUpperCase()
@@ -143,17 +226,46 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-5"
         >
-          {/* Avatar */}
-          <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center text-xl font-black text-white flex-shrink-0 overflow-hidden border-2 border-zinc-700">
-            {user?.user_metadata?.avatar_url
-              ? <img src={user.user_metadata.avatar_url} alt={displayName} className="w-full h-full object-cover" />
-              : initials
-            }
+          {/* Avatar with upload overlay */}
+          <div className="relative flex-shrink-0 group">
+            <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center text-xl font-black text-white overflow-hidden border-2 border-zinc-700">
+              {avatarUploading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            {/* Upload overlay */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+              title="Change avatar"
+            >
+              <span className="text-white text-lg">📷</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
           </div>
+
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-white truncate">{displayName}</h1>
             <p className="text-zinc-500 text-xs mt-0.5 truncate">{user?.email}</p>
             <p className="text-zinc-700 text-xs mt-1">Member since {memberSince}</p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors mt-1"
+            >
+              {avatarUploading ? "Uploading…" : "Change avatar"}
+            </button>
           </div>
         </motion.div>
 
@@ -165,10 +277,10 @@ export default function ProfilePage() {
           className="grid grid-cols-4 gap-3"
         >
           {[
-            { label: "Debates",  value: debates.length,        color: "text-white" },
-            { label: "Wins",     value: wins,                  color: "text-emerald-400" },
-            { label: "Losses",   value: losses,                color: "text-red-400" },
-            { label: "Win rate", value: `${winRate}%`,         color: winRate >= 50 ? "text-emerald-400" : "text-red-400" },
+            { label: "Debates",  value: debates.length,   color: "text-white" },
+            { label: "Wins",     value: wins,             color: "text-emerald-400" },
+            { label: "Losses",   value: losses,           color: "text-red-400" },
+            { label: "Win rate", value: `${winRate}%`,    color: winRate >= 50 ? "text-emerald-400" : "text-red-400" },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -183,7 +295,7 @@ export default function ProfilePage() {
           ))}
         </motion.div>
 
-        {/* Loading state */}
+        {/* Loading */}
         {loading && (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
@@ -281,22 +393,15 @@ export default function ProfilePage() {
                       d.session.status === "complete" ? "cursor-pointer hover:border-zinc-600" : "opacity-50"
                     }`}
                   >
-                    {/* Win/loss dot */}
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      d.verdict?.winner === "user"
-                        ? "bg-emerald-400"
-                        : d.verdict?.winner === "ai"
-                        ? "bg-red-400"
-                        : "bg-zinc-600"
+                      d.verdict?.winner === "user" ? "bg-emerald-400"
+                      : d.verdict?.winner === "ai" ? "bg-red-400"
+                      : "bg-zinc-600"
                     }`} />
-
                     <p className="flex-1 text-zinc-300 text-sm truncate">{d.session.topic}</p>
-
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {d.verdict && (
-                        <span className={`text-xs font-semibold ${
-                          d.verdict.winner === "user" ? "text-emerald-400" : "text-red-400"
-                        }`}>
+                        <span className={`text-xs font-semibold ${d.verdict.winner === "user" ? "text-emerald-400" : "text-red-400"}`}>
                           {d.total}/40
                         </span>
                       )}
