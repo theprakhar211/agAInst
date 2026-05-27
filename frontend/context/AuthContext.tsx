@@ -16,6 +16,7 @@ interface AuthContextValue {
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>
   signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null; alreadyExists: boolean }>
   signOut: () => Promise<void>
+  updateUsername: (username: string) => Promise<{ error: string | null }>
   // Modal controls — call these from anywhere
   openAuthModal: (mode?: 'login' | 'signup') => void
   closeAuthModal: () => void
@@ -75,6 +76,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [supabase])
 
+  const updateUsername = useCallback(async (username: string) => {
+    const trimmed = username.trim()
+    if (!trimmed) return { error: 'Username cannot be empty.' }
+    if (trimmed.length < 2) return { error: 'Username must be at least 2 characters.' }
+    if (trimmed.length > 30) return { error: 'Username must be under 30 characters.' }
+    if (!/^[a-zA-Z0-9_ -]+$/.test(trimmed)) return { error: 'Only letters, numbers, spaces, _ and - allowed.' }
+
+    // Update Supabase auth metadata
+    const { error: authError } = await supabase.auth.updateUser({
+      data: { full_name: trimmed }
+    })
+    if (authError) return { error: authError.message }
+
+    // Update profiles table
+    const { error: dbError } = await supabase
+      .from('profiles')
+      .update({ username: trimmed })
+      .eq('id', (await supabase.auth.getUser()).data.user?.id ?? '')
+
+    if (dbError) return { error: dbError.message }
+
+    return { error: null }
+  }, [supabase])
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
   }, [supabase])
@@ -90,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, loading,
       signInWithGoogle, signInWithEmail, signUpWithEmail, signOut,
+      updateUsername,
       openAuthModal, closeAuthModal, authModalOpen, authModalMode,
     }}>
       {children}

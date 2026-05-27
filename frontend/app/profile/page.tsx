@@ -28,12 +28,16 @@ interface DebateWithVerdict {
 
 export default function ProfilePage() {
   const router = useRouter()
-  const { user, loading: authLoading, openAuthModal } = useAuth()
+  const { user, loading: authLoading, openAuthModal, updateUsername } = useAuth()
   const [debates, setDebates] = useState<DebateWithVerdict[]>([])
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [editingUsername, setEditingUsername] = useState(false)
+  const [usernameInput, setUsernameInput] = useState("")
+  const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [usernameSaving, setUsernameSaving] = useState(false)
 
   // Load avatar from user metadata
   useEffect(() => {
@@ -143,6 +147,22 @@ export default function ProfilePage() {
     } finally {
       setAvatarUploading(false)
     }
+  }
+
+  // ── Username editing ───────────────────────────────────────
+  function startEditingUsername() {
+    setUsernameInput(displayName)
+    setUsernameError(null)
+    setEditingUsername(true)
+  }
+
+  async function saveUsername() {
+    setUsernameSaving(true)
+    setUsernameError(null)
+    const { error } = await updateUsername(usernameInput)
+    setUsernameSaving(false)
+    if (error) { setUsernameError(error); return }
+    setEditingUsername(false)
   }
 
   // ── Computed stats ──────────────────────────────────────────
@@ -255,8 +275,40 @@ export default function ProfilePage() {
             />
           </div>
 
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-white truncate">{displayName}</h1>
+          <div className="min-w-0 flex-1">
+            {/* Username — click to edit */}
+            {editingUsername ? (
+              <div className="space-y-1.5">
+                <input
+                  value={usernameInput}
+                  onChange={e => { setUsernameInput(e.target.value); setUsernameError(null) }}
+                  onKeyDown={e => { if (e.key === "Enter") saveUsername(); if (e.key === "Escape") setEditingUsername(false) }}
+                  className="w-full bg-zinc-800 border border-zinc-600 focus:border-red-500/50 rounded-lg px-3 py-1.5 text-white text-sm outline-none"
+                  maxLength={30}
+                  autoFocus
+                />
+                {usernameError && <p className="text-red-400 text-xs">{usernameError}</p>}
+                <div className="flex gap-2">
+                  <button onClick={saveUsername} disabled={usernameSaving}
+                    className="text-xs px-3 py-1 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-lg transition-all">
+                    {usernameSaving ? "Saving…" : "Save"}
+                  </button>
+                  <button onClick={() => setEditingUsername(false)}
+                    className="text-xs px-3 py-1 border border-zinc-700 text-zinc-400 hover:text-white rounded-lg transition-all">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h1 className="text-xl font-bold text-white truncate">{displayName}</h1>
+                <button onClick={startEditingUsername}
+                  className="text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100 transition-all text-xs"
+                  title="Edit username">
+                  ✏️
+                </button>
+              </div>
+            )}
             <p className="text-zinc-500 text-xs mt-0.5 truncate">{user?.email}</p>
             <p className="text-zinc-700 text-xs mt-1">Member since {memberSince}</p>
             <button

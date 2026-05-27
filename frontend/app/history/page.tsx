@@ -4,41 +4,67 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { getAllDebates, getAllPvPSessions } from "@/lib/cloudStorage"
+import { getSupabaseClient } from "@/lib/supabase"
 import { DebateSession, PvPSession } from "@/lib/types"
+import { type OnlinePvPRoom } from "@/lib/onlinePvp"
 import { useAuth } from "@/context/AuthContext"
 import { UserMenu } from "@/components/UserMenu"
 import Image from "next/image"
 
-type Tab = "all" | "vs-ai" | "pvp"
+type Tab = "all" | "vs-ai" | "pvp" | "online"
 
 export default function HistoryPage() {
   const router = useRouter()
   const { user, loading: authLoading, openAuthModal } = useAuth()
   const [debates, setDebates] = useState<DebateSession[]>([])
   const [pvpSessions, setPvpSessions] = useState<PvPSession[]>([])
+  const [onlineRooms, setOnlineRooms] = useState<OnlinePvPRoom[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>("all")
 
   useEffect(() => {
     if (authLoading) return
-    Promise.all([getAllDebates(), getAllPvPSessions()]).then(([d, p]) => {
+
+    async function load() {
+      const [d, p] = await Promise.all([getAllDebates(), getAllPvPSessions()])
       setDebates(d)
       setPvpSessions(p)
+
+      // Fetch online PvP rooms where this user was a participant
+      if (user) {
+        const supabase = getSupabaseClient()
+        const playerId = localStorage.getItem('against_player_id')
+        if (playerId) {
+          const { data } = await supabase
+            .from('online_pvp_rooms')
+            .select('*')
+            .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+            .eq('status', 'complete')
+            .order('created_at', { ascending: false })
+            .limit(20)
+          setOnlineRooms((data ?? []) as OnlinePvPRoom[])
+        }
+      }
+
       setLoading(false)
-    })
+    }
+
+    load()
   }, [authLoading, user])
 
   // Combined + sorted by date for "all" tab
-  type AnySession = { id: string; createdAt: number; type: "ai" | "pvp" }
+  type AnySession = { id: string; createdAt: number; type: "ai" | "pvp" | "online" }
   const allSorted: AnySession[] = [
     ...debates.map(d => ({ id: d.id, createdAt: d.createdAt, type: "ai" as const })),
     ...pvpSessions.map(p => ({ id: p.id, createdAt: p.createdAt, type: "pvp" as const })),
+    ...onlineRooms.map(r => ({ id: r.code, createdAt: new Date(r.created_at).getTime(), type: "online" as const })),
   ].sort((a, b) => b.createdAt - a.createdAt)
 
   const debateMap = Object.fromEntries(debates.map(d => [d.id, d]))
   const pvpMap = Object.fromEntries(pvpSessions.map(p => [p.id, p]))
+  const onlineMap = Object.fromEntries(onlineRooms.map(r => [r.code, r]))
 
-  const totalCount = debates.length + pvpSessions.length
+  const totalCount = debates.length + pvpSessions.length + onlineRooms.length
 
   return (
     <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
@@ -85,10 +111,10 @@ export default function HistoryPage() {
           </button>
         </div>
 
-        {/* Tabs — only show if there's something to filter */}
+        {/* Tabs */}
         {!loading && totalCount > 0 && (
-          <div className="flex gap-2">
-            {(["all", "vs-ai", "pvp"] as Tab[]).map(t => (
+          <div className="flex gap-2 flex-wrap">
+            {(["all", "vs-ai", "pvp", "online"] as Tab[]).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -98,7 +124,10 @@ export default function HistoryPage() {
                     : "border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
                 }`}
               >
-                {t === "all" ? `All (${totalCount})` : t === "vs-ai" ? `🤖 VS AI (${debates.length})` : `👥 2 Player (${pvpSessions.length})`}
+                {t === "all" ? `All (${totalCount})`
+                  : t === "vs-ai" ? `🤖 VS AI (${debates.length})`
+                  : t === "pvp" ? `👥 2 Player (${pvpSessions.length})`
+                  : `🌐 Online (${onlineRooms.length})`}
               </button>
             ))}
           </div>
@@ -121,25 +150,16 @@ export default function HistoryPage() {
         {/* All tab — chronological mix */}
         {!loading && tab === "all" && allSorted.map((s, i) =>
           s.type === "ai" ? (
-            <AICard
-              key={s.id}
-              debate={debateMap[s.id]}
-              index={i}
+            <AICard key={s.id} debate={debateMap[s.id]} index={i}
               onClick={() => debateMap[s.id].status === "complete"
-                ? router.push(`/verdict/${s.id}`)
-                : router.push(`/debate/${s.id}`)
-              }
-            />
-          ) : (
-            <PvPCard
-              key={s.id}
-              session={pvpMap[s.id]}
-              index={i}
+                ? router.push(`/verdict/${s.id}`) : router.push(`/debate/${s.id}`)} />
+          ) : s.type === "pvp" ? (
+            <PvPCard key={s.id} session={pvpMap[s.id]} index={i}
               onClick={() => pvpMap[s.id].status === "complete"
-                ? router.push(`/pvp/verdict/${s.id}`)
-                : router.push(`/pvp/${s.id}`)
-              }
-            />
+                ? router.push(`/pvp/verdict/${s.id}`) : router.push(`/pvp/${s.id}`)} />
+          ) : (
+            <OnlineCard key={s.id} room={onlineMap[s.id]} index={i}
+              onClick={() => router.push(`/online-pvp/verdict/${s.id}`)} />
           )
         )}
 
@@ -164,15 +184,18 @@ export default function HistoryPage() {
           <p className="text-zinc-500 text-sm">No 2 Player debates yet.</p>
         )}
         {!loading && tab === "pvp" && pvpSessions.map((p, i) => (
-          <PvPCard
-            key={p.id}
-            session={p}
-            index={i}
+          <PvPCard key={p.id} session={p} index={i}
             onClick={() => p.status === "complete"
-              ? router.push(`/pvp/verdict/${p.id}`)
-              : router.push(`/pvp/${p.id}`)
-            }
-          />
+              ? router.push(`/pvp/verdict/${p.id}`) : router.push(`/pvp/${p.id}`)} />
+        ))}
+
+        {/* Online PvP tab */}
+        {!loading && tab === "online" && onlineRooms.length === 0 && (
+          <p className="text-zinc-500 text-sm">No online debates yet.</p>
+        )}
+        {!loading && tab === "online" && onlineRooms.map((r, i) => (
+          <OnlineCard key={r.code} room={r} index={i}
+            onClick={() => router.push(`/online-pvp/verdict/${r.code}`)} />
         ))}
 
       </div>
@@ -216,6 +239,46 @@ function AICard({ debate, index, onClick }: {
         <span>{debate.rounds.length}/3 rounds</span>
         <span>·</span>
         <span>{new Date(debate.createdAt).toLocaleDateString()}</span>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Online PvP card ──────────────────────────────────────────
+
+function OnlineCard({ room, index, onClick }: {
+  room: OnlinePvPRoom
+  index: number
+  onClick: () => void
+}) {
+  if (!room) return null
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+      onClick={onClick}
+      className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 space-y-2 cursor-pointer hover:border-zinc-500 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-white font-medium text-sm truncate">{room.topic}</p>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[10px] text-zinc-600 border border-zinc-800 px-2 py-0.5 rounded-full">🌐 Online</span>
+          <span className="text-xs px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
+            Complete
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 text-xs text-zinc-500">
+        <span className="text-red-400">{room.player1_name}</span>
+        <span className="text-zinc-600">FOR</span>
+        <span className="text-zinc-700">vs</span>
+        <span className="text-blue-400">{room.player2_name ?? "?"}</span>
+        <span className="text-zinc-600">AGAINST</span>
+        <span>·</span>
+        <span className="font-mono text-zinc-700">#{room.code}</span>
+        <span>·</span>
+        <span>{new Date(room.created_at).toLocaleDateString()}</span>
       </div>
     </motion.div>
   )
