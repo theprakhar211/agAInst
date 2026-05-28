@@ -258,10 +258,9 @@ But beyond the demo moment, here's what this project actually demonstrates:
 - [x] 📸 Shareable result card + PDF export
 - [x] 📚 Local debate history
 - [x] 🔥 Trending topics via web search
-- [ ] 👤 User accounts + cloud history
+- [x] 👤 User accounts + cloud history
 - [ ] 🏆 Global leaderboard
 - [ ] 🎙️ Voice input support
-- [ ] 📱 Mobile app
 
 ---
 
