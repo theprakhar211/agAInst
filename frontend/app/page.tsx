@@ -120,13 +120,13 @@ export default function Home() {
             <Image
               src="/logo3.png"
               alt="agAInst logo"
-              width={56}
-              height={56}
+              width={86}
+              height={86}
               priority
               className="rounded-md"
             />
             <span className="text-xl font-black tracking-tighter uppercase">
-              ag<span className="text-red-600">AIN</span>st
+              ag<span className="text-red-600">AI</span>st
             </span>
           </div>
 
