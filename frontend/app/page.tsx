@@ -126,7 +126,7 @@ export default function Home() {
               className="rounded-md"
             />
             <span className="text-xl font-black tracking-tighter uppercase">
-              ag<span className="text-red-600">AI</span>st
+              ag<span className="text-red-600">AI</span>nst
             </span>
           </div>
 
