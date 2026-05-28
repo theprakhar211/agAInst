@@ -120,8 +120,8 @@ export default function Home() {
             <Image
               src="/logo3.png"
               alt="agAInst logo"
-              width={36}
-              height={36}
+              width={56}
+              height={56}
               priority
               className="rounded-md"
             />
