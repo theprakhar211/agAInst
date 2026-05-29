@@ -9,7 +9,7 @@ import { UserMenu } from "@/components/UserMenu"
 
 const SCORE_LABELS = ["logic", "evidence", "rebuttal", "clarity"]
 const SCORE_ICONS: Record<string, string> = {
-  logic: "⚡", evidence: "📊", rebuttal: "🔄", clarity: "💡"
+  logic: "⚡", evidence: "📊", rebuttal: "🔄", clarity: "💡",
 }
 
 export default function PvPVerdictPage() {
@@ -25,130 +25,185 @@ export default function PvPVerdictPage() {
     setSession(s)
 
     const cached = localStorage.getItem(`pvp_verdict_${id}`)
-    if (cached) {
-      setVerdict(JSON.parse(cached))
-      setLoading(false)
-    }
+    if (cached) { setVerdict(JSON.parse(cached)); setLoading(false) }
   }, [id, router])
 
   if (!session) return null
 
+  const winnerName = verdict?.winner
+  const winnerIsP1 = winnerName === session.player1Name
+
   return (
-    <main className="min-h-screen bg-[#080808] text-white">
-      
-      {/* Nav — Exact copy of your main page navbar layout */}
-      <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
-          <Image
-            src="/logo3.png"
-            alt="agAInst logo"
-            width={102}
-            height={102}
-            priority
-            className="rounded-lg"
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/history")}
-            className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 rounded-lg transition-all"
-          >
-            📚 Past debates
-          </button>
-          <UserMenu />
+    <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
+
+      {/* ─── NAV ─── */}
+      <nav className="fixed top-0 w-full z-50 bg-[#080808]/90 backdrop-blur-md border-b border-zinc-900">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
+            <Image src="/logo3.png" alt="agAInst logo" width={56} height={56} priority className="rounded-md" />
+            <span className="text-xl font-black tracking-tighter uppercase hidden sm:block">
+              ag<span className="text-red-600">AIN</span>st
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push("/history")}
+              className="hidden sm:flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-white border border-zinc-800 hover:border-zinc-600 px-4 py-2 transition-all">
+              📚 Past debates
+            </button>
+            <UserMenu />
+          </div>
         </div>
       </nav>
 
-      {/* Main Content Layout Container */}
-      <div className="max-w-2xl mx-auto px-4 pt-12 pb-24">
+      <div className="max-w-2xl mx-auto px-4 pt-32 pb-24">
 
-        {/* Topic header */}
+        {/* ─── Topic badge ─── */}
         <div className="text-center mb-10">
-          <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">2 Player Verdict</p>
-          <h1 className="text-2xl font-bold">{session.topic}</h1>
-          <div className="flex items-center justify-center gap-4 mt-3 text-sm">
-            <span className="text-red-400 font-medium">{session.player1Name}</span>
-            <span className="text-zinc-600">vs</span>
-            <span className="text-blue-400 font-medium">{session.player2Name}</span>
+          <div className="inline-flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3.5 py-1.5 mb-5">
+            <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-zinc-500">2 Player · Verdict</span>
+          </div>
+          <h1 className="text-2xl font-black uppercase tracking-tighter text-white mb-4">{session.topic}</h1>
+          {/* Player vs player */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="text-center">
+              <div className="text-sm font-bold text-red-400 mb-0.5">{session.player1Name}</div>
+              <div className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">For</div>
+            </div>
+            <div className="text-zinc-800 font-mono text-sm">—vs—</div>
+            <div className="text-center">
+              <div className="text-sm font-bold text-blue-400 mb-0.5">{session.player2Name}</div>
+              <div className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Against</div>
+            </div>
           </div>
         </div>
 
+        {/* ─── Loading ─── */}
         {loading && (
-          <div className="text-center py-24">
-            <div className="w-10 h-10 border-2 border-red-500/50 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-zinc-500 text-sm">Judge is deliberating...</p>
+          <div className="text-center py-24 space-y-4">
+            <div className="relative w-14 h-14 mx-auto">
+              <div className="absolute inset-0 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+              <div className="absolute inset-2 border-2 border-zinc-800 border-b-zinc-500 rounded-full animate-spin [animation-direction:reverse] [animation-duration:0.7s]" />
+            </div>
+            <p className="text-zinc-600 text-[11px] font-mono uppercase tracking-[0.3em]">Judge deliberating...</p>
           </div>
         )}
 
         {verdict && (
-          <motion.div className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div className="space-y-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
-            {/* Winner */}
+            {/* ─── Winner hero ─── */}
             <motion.div
-              className="rounded-2xl border p-8 text-center bg-emerald-500/5 border-emerald-500/20"
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
+              className="relative overflow-hidden border p-8 text-center"
+              style={{
+                background: "linear-gradient(135deg, rgba(16,185,129,0.06) 0%, transparent 60%)",
+                borderColor: "rgba(16,185,129,0.25)",
+              }}
+              initial={{ scale: 0.97, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
             >
-              <div className="text-5xl font-black text-emerald-400 mb-2">{verdict.winner} wins</div>
-              <div className="text-3xl mb-4">🏆</div>
+              {/* Corner accents */}
+              {["top-0 left-0 border-t border-l", "top-0 right-0 border-t border-r",
+                "bottom-0 left-0 border-b border-l", "bottom-0 right-0 border-b border-r"].map((pos, i) => (
+                <div key={i} className={`absolute w-5 h-5 ${pos} border-emerald-500/40`} />
+              ))}
+
+              <div className="inline-block border border-emerald-500/30 px-3 py-1 mb-6">
+                <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-emerald-500">Victory</span>
+              </div>
+
+              <div className="text-6xl font-black uppercase tracking-tighter mb-2 text-emerald-400"
+                style={{ textShadow: "0 0 40px rgba(16,185,129,0.3)" }}>
+                {verdict.winner} wins
+              </div>
+              <div className="text-3xl mb-5">🏆</div>
               <p className="text-zinc-400 text-sm leading-relaxed max-w-md mx-auto">{verdict.reasoning}</p>
             </motion.div>
 
-            {/* Scores */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* ─── Score breakdown ─── */}
+            <motion.div className="grid grid-cols-2 gap-3"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
               {[
-                { name: session.player1Name, scores: verdict.player1_scores, color: "red" },
-                { name: session.player2Name, scores: verdict.player2_scores, color: "blue" },
-              ].map(({ name, scores, color }) => (
-                <div key={name} className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
-                  <p className="text-xs text-zinc-500 uppercase tracking-widest mb-4">{name}</p>
-                  <div className="space-y-3">
-                    {SCORE_LABELS.map((label, idx) => (
-                      <div key={label}>
-                        <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-xs text-zinc-400 flex items-center gap-1.5">
-                            {SCORE_ICONS[label]} {label}
-                          </span>
-                          <span className="text-xs font-medium text-zinc-300">{scores?.[label]}/10</span>
+                { name: session.player1Name, scores: verdict.player1_scores, color: "red", isWinner: winnerIsP1 },
+                { name: session.player2Name, scores: verdict.player2_scores, color: "blue", isWinner: !winnerIsP1 },
+              ].map(({ name, scores, color, isWinner }) => (
+                <div key={name} className="bg-zinc-900/40 border border-zinc-800 p-5 relative">
+                  <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-zinc-700" />
+                  <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-zinc-700" />
+                  <div className="flex items-center justify-between mb-4">
+                    <p className={`text-[10px] font-mono uppercase tracking-widest truncate ${
+                      color === "red" ? "text-red-400" : "text-blue-400"
+                    }`}>{name}</p>
+                    {isWinner && (
+                      <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 border border-emerald-500/30 text-emerald-500 bg-emerald-500/5 flex-shrink-0 ml-2">
+                        Winner
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-3.5">
+                    {SCORE_LABELS.map((label, idx) => {
+                      const val = scores?.[label] ?? 0
+                      return (
+                        <div key={label}>
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-xs text-zinc-500 font-mono flex items-center gap-1.5">
+                              {SCORE_ICONS[label]} {label}
+                            </span>
+                            <span className="text-xs font-black text-zinc-300 font-mono">
+                              {val}<span className="text-zinc-700">/10</span>
+                            </span>
+                          </div>
+                          <div className="h-px bg-zinc-800 overflow-hidden">
+                            <motion.div
+                              className={`h-full ${color === "red" ? "bg-red-500" : "bg-blue-500"}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${val * 10}%` }}
+                              transition={{ duration: 0.7, delay: 0.4 + idx * 0.1, ease: "easeOut" }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                          <motion.div
-                            className={`h-full rounded-full ${color === "red" ? "bg-red-500" : "bg-blue-500"}`}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${(scores?.[label] ?? 0) * 10}%` }}
-                            transition={{ duration: 0.6, delay: 0.3 + idx * 0.1 }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               ))}
-            </div>
+            </motion.div>
 
-            {/* Strongest argument */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
-              <p className="text-xs text-zinc-600 uppercase tracking-widest mb-3">⭐ Strongest argument</p>
-              <p className="text-zinc-300 text-sm leading-relaxed italic">&ldquo;{verdict.strongest_argument}&rdquo;</p>
-            </div>
-
-            {/* Fallacies */}
-            {verdict.fallacies?.length > 0 && (
-              <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-5">
-                <p className="text-xs text-amber-600 uppercase tracking-widest mb-3">⚠️ Fallacies detected</p>
-                <div className="flex flex-wrap gap-2">
-                  {verdict.fallacies.map((f: string) => (
-                    <span key={f} className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full">{f}</span>
-                  ))}
-                </div>
-              </div>
+            {/* ─── Strongest argument ─── */}
+            {verdict.strongest_argument && (
+              <motion.div className="border border-zinc-800 bg-zinc-900/30 p-5 relative"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-zinc-700" />
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-600 mb-3">⭐ Strongest argument</p>
+                <p className="text-zinc-300 text-sm leading-relaxed font-light italic">&ldquo;{verdict.strongest_argument}&rdquo;</p>
+              </motion.div>
             )}
 
-            <button onClick={() => router.push("/")}
-              className="w-full py-3.5 border border-zinc-800 hover:border-zinc-600 text-zinc-500 hover:text-zinc-300 rounded-xl transition-all text-sm">
-              ← New debate
-            </button>
+            {/* ─── Fallacies ─── */}
+            {verdict.fallacies?.length > 0 && (
+              <motion.div className="border border-amber-500/15 bg-amber-500/5 p-5"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-amber-600 mb-3">⚠ Fallacies detected</p>
+                <div className="flex flex-wrap gap-2">
+                  {verdict.fallacies.map((f: string) => (
+                    <span key={f} className="text-[11px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ─── Actions ─── */}
+            <motion.div className="space-y-2 pt-2"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}>
+              <button onClick={() => router.push("/")}
+                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-sm uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.3)] active:scale-[0.99]">
+                ⚔️ New debate
+              </button>
+              <button onClick={() => router.push("/")}
+                className="w-full py-3.5 border border-zinc-800 hover:border-zinc-600 text-zinc-600 hover:text-zinc-400 transition-all text-xs font-mono uppercase tracking-widest">
+                ← Home
+              </button>
+            </motion.div>
 
           </motion.div>
         )}
