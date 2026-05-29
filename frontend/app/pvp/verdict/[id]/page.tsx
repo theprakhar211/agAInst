@@ -36,6 +36,15 @@ export default function PvPVerdictPage() {
   return (
     <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
 
+      {/* ─── BG TEXTURE ─── */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-[0.025]" style={{
+          backgroundImage: `linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)`,
+          backgroundSize: "60px 60px",
+        }} />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-red-600/8 blur-[140px] rounded-full" />
+      </div>
+
       {/* ─── NAV ─── */}
       <nav className="fixed top-0 w-full z-50 bg-[#080808]/90 backdrop-blur-md border-b border-zinc-900">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -55,7 +64,7 @@ export default function PvPVerdictPage() {
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-4 pt-32 pb-24">
+      <div className="relative z-10 max-w-2xl mx-auto px-4 pt-32 pb-24">
 
         {/* ─── Topic badge ─── */}
         <div className="text-center mb-10">

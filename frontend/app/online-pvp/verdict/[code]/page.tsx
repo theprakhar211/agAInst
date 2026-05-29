@@ -25,9 +25,20 @@ export default function OnlinePvPVerdictPage() {
     })
   }, [code, router])
 
+  const BgTexture = () => (
+    <div className="fixed inset-0 z-0 pointer-events-none">
+      <div className="absolute inset-0 opacity-[0.025]" style={{
+        backgroundImage: `linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)`,
+        backgroundSize: "60px 60px",
+      }} />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-red-600/8 blur-[140px] rounded-full" />
+    </div>
+  )
+
   if (loading) return (
     <main className="min-h-screen bg-[#080808] flex items-center justify-center">
-      <div className="text-center space-y-4">
+      <BgTexture />
+      <div className="relative z-10 text-center space-y-4">
         <div className="relative w-14 h-14 mx-auto">
           <div className="absolute inset-0 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
           <div className="absolute inset-2 border-2 border-zinc-800 border-b-zinc-500 rounded-full animate-spin [animation-direction:reverse] [animation-duration:0.7s]" />
@@ -39,7 +50,8 @@ export default function OnlinePvPVerdictPage() {
 
   if (!room || !room.verdict) return (
     <main className="min-h-screen bg-[#080808] flex items-center justify-center">
-      <div className="text-center space-y-4 border border-zinc-800 p-8 relative">
+      <BgTexture />
+      <div className="relative z-10 text-center space-y-4 border border-zinc-800 p-8 relative">
         <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-red-500/30" />
         <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-red-500/30" />
         <p className="text-zinc-500 text-sm font-mono">Verdict not ready yet.</p>
@@ -56,6 +68,9 @@ export default function OnlinePvPVerdictPage() {
 
   return (
     <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
+
+      {/* ─── BG TEXTURE ─── */}
+      <BgTexture />
 
       {/* ─── NAV ─── */}
       <nav className="fixed top-0 w-full z-50 bg-[#080808]/90 backdrop-blur-md border-b border-zinc-900">
@@ -76,7 +91,7 @@ export default function OnlinePvPVerdictPage() {
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-4 pt-32 pb-24 space-y-3">
+      <div className="relative z-10 max-w-2xl mx-auto px-4 pt-32 pb-24 space-y-3">
 
         {/* ─── Topic badge ─── */}
         <div className="text-center mb-10">

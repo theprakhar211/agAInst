@@ -140,6 +140,14 @@ export default function ProfilePage() {
   if (!authLoading && !user) {
     return (
       <main className="min-h-screen bg-[#080808] text-white flex flex-col selection:bg-red-500/30">
+        {/* BG texture */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <div className="absolute inset-0 opacity-[0.025]" style={{
+            backgroundImage: `linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)`,
+            backgroundSize: "60px 60px",
+          }} />
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[250px] bg-red-600/8 blur-[120px] rounded-full" />
+        </div>
         <nav className="fixed top-0 w-full z-50 bg-[#080808]/90 backdrop-blur-md border-b border-zinc-900">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
@@ -152,7 +160,7 @@ export default function ProfilePage() {
           </div>
         </nav>
 
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center px-6">
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-6 text-center px-6">
           {/* Locked dossier graphic */}
           <div className="relative w-24 h-24 border border-zinc-800 flex items-center justify-center">
             <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-red-500/40" />
@@ -178,6 +186,15 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
 
+      {/* ─── BG TEXTURE ─── */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-[0.025]" style={{
+          backgroundImage: `linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)`,
+          backgroundSize: "60px 60px",
+        }} />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-red-600/8 blur-[140px] rounded-full" />
+      </div>
+
       {/* ─── NAV ─── */}
       <nav className="fixed top-0 w-full z-50 bg-[#080808]/90 backdrop-blur-md border-b border-zinc-900">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -197,7 +214,7 @@ export default function ProfilePage() {
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-5 pt-28 pb-24 space-y-4">
+      <div className="relative z-10 max-w-2xl mx-auto px-5 pt-28 pb-24 space-y-4">
 
         {/* ─── DOSSIER HEADER ─── */}
         <motion.div
