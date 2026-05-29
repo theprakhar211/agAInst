@@ -1,5 +1,11 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
+function withTimeout(ms: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), ms)
+  return { signal: controller.signal, clear: () => clearTimeout(id) }
+}
+
 export async function argue(payload: {
   topic: string
   user_side: "for" | "against"
@@ -11,7 +17,6 @@ export async function argue(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-  
   if (!res.ok) {
     const errorText = await res.text().catch(() => "No error body details")
     console.error(`❌ Argue Request Failed (${res.status}):`, errorText)
@@ -25,18 +30,26 @@ export async function judge(payload: {
   user_side: "for" | "against"
   history: { role: "user" | "assistant"; content: string }[]
 }) {
-  const res = await fetch(`${BASE_URL}/debate/judge`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
-  
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "No error body details")
-    console.error(`❌ Judge Request Failed (${res.status}):`, errorText)
-    throw new Error("Judge request failed")
+  const { signal, clear } = withTimeout(35000)
+  try {
+    const res = await fetch(`${BASE_URL}/debate/judge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+    })
+    clear()
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "No error body details")
+      console.error(`❌ Judge Request Failed (${res.status}):`, errorText)
+      throw new Error("Judge request failed")
+    }
+    return res.json()
+  } catch (err: any) {
+    clear()
+    if (err.name === "AbortError") throw new Error("Judge timed out — server took too long to respond")
+    throw err
   }
-  return res.json()
 }
 
 export async function analyse(payload: {
@@ -50,7 +63,6 @@ export async function analyse(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-  
   if (!res.ok) {
     const errorText = await res.text().catch(() => "No error body details")
     console.error(`❌ Analyse Request Failed (${res.status}):`, errorText)
@@ -66,18 +78,26 @@ export async function pvpJudge(payload: {
   p1_side: "for" | "against"
   history: { role: "user" | "assistant"; content: string }[]
 }) {
-  const res = await fetch(`${BASE_URL}/debate/pvp/judge`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
-  
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "No error body details")
-    console.error(`❌ PvP Judge Request Failed (${res.status}):`, errorText)
-    throw new Error("PvP judge request failed")
+  const { signal, clear } = withTimeout(35000)
+  try {
+    const res = await fetch(`${BASE_URL}/debate/pvp/judge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+    })
+    clear()
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "No error body details")
+      console.error(`❌ PvP Judge Request Failed (${res.status}):`, errorText)
+      throw new Error("PvP judge request failed")
+    }
+    return res.json()
+  } catch (err: any) {
+    clear()
+    if (err.name === "AbortError") throw new Error("Judge timed out — server took too long to respond")
+    throw err
   }
-  return res.json()
 }
 
 export async function getTrendingTopics() {
