@@ -11,7 +11,7 @@ import { UserMenu } from "@/components/UserMenu"
 import Image from "next/image"
 
 interface Verdict {
-  winner: "user" | "ai"
+  winner: "user" | "ai" | string  // AI occasionally returns unexpected strings for draws
   user_scores: Record<string, number>
   ai_scores: Record<string, number>
   strongest_argument: string
@@ -114,7 +114,7 @@ export default function VerdictPage() {
       line(`agAInst: ${r.aiArgument}`, 10); y += 4
     })
     y += 4; line("Verdict", 14, true)
-    line(`Winner: ${verdict.winner === "user" ? "You" : "agAInst"}`, 12, true)
+    line(`Winner: ${verdict.winner === "user" ? "You" : verdict.winner === "ai" ? "agAInst" : "Draw"}`, 12, true)
     line(`Reasoning: ${verdict.reasoning}`, 10)
     SCORE_LABELS.forEach(l => { line(`${l}: You ${(verdict.user_scores?.[l]) ?? 0}/10 vs agAInst ${(verdict.ai_scores?.[l]) ?? 0}/10`, 10) })
     if (verdict.strongest_argument) line(`Strongest: "${verdict.strongest_argument}"`, 10)
@@ -126,6 +126,7 @@ export default function VerdictPage() {
   const userTotal = verdict?.user_scores ? SCORE_LABELS.reduce((s, l) => s + (verdict.user_scores[l] || 0), 0) : 0
   const aiTotal = verdict?.ai_scores ? SCORE_LABELS.reduce((s, l) => s + (verdict.ai_scores[l] || 0), 0) : 0
   const userWon = verdict?.winner === "user"
+  const isDraw = verdict !== null && verdict.winner !== "user" && verdict.winner !== "ai"
 
   return (
     <main className="min-h-screen bg-[#080808] text-white selection:bg-red-500/30 selection:text-red-200">
@@ -215,44 +216,50 @@ export default function VerdictPage() {
                 style={{
                   background: userWon
                     ? "linear-gradient(135deg, rgba(16,185,129,0.06) 0%, transparent 60%)"
+                    : isDraw
+                    ? "linear-gradient(135deg, rgba(161,161,170,0.06) 0%, transparent 60%)"
                     : "linear-gradient(135deg, rgba(239,68,68,0.06) 0%, transparent 60%)",
-                  borderColor: userWon ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)",
+                  borderColor: userWon
+                    ? "rgba(16,185,129,0.25)"
+                    : isDraw
+                    ? "rgba(161,161,170,0.2)"
+                    : "rgba(239,68,68,0.25)",
                 }}
                 initial={{ scale: 0.97, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
               >
                 {/* Corner accents */}
-                <div className={`absolute top-0 left-0 w-5 h-5 border-t border-l ${userWon ? "border-emerald-500/40" : "border-red-500/40"}`} />
-                <div className={`absolute top-0 right-0 w-5 h-5 border-t border-r ${userWon ? "border-emerald-500/40" : "border-red-500/40"}`} />
-                <div className={`absolute bottom-0 left-0 w-5 h-5 border-b border-l ${userWon ? "border-emerald-500/40" : "border-red-500/40"}`} />
-                <div className={`absolute bottom-0 right-0 w-5 h-5 border-b border-r ${userWon ? "border-emerald-500/40" : "border-red-500/40"}`} />
+                <div className={`absolute top-0 left-0 w-5 h-5 border-t border-l ${userWon ? "border-emerald-500/40" : isDraw ? "border-zinc-500/40" : "border-red-500/40"}`} />
+                <div className={`absolute top-0 right-0 w-5 h-5 border-t border-r ${userWon ? "border-emerald-500/40" : isDraw ? "border-zinc-500/40" : "border-red-500/40"}`} />
+                <div className={`absolute bottom-0 left-0 w-5 h-5 border-b border-l ${userWon ? "border-emerald-500/40" : isDraw ? "border-zinc-500/40" : "border-red-500/40"}`} />
+                <div className={`absolute bottom-0 right-0 w-5 h-5 border-b border-r ${userWon ? "border-emerald-500/40" : isDraw ? "border-zinc-500/40" : "border-red-500/40"}`} />
 
                 {/* Result label */}
                 <div className="inline-block border px-3 py-1 mb-6"
-                  style={{ borderColor: userWon ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)" }}>
-                  <span className={`text-[10px] font-mono uppercase tracking-[0.3em] ${userWon ? "text-emerald-500" : "text-red-500"}`}>
-                    {userWon ? "Victory" : "Defeat"}
+                  style={{ borderColor: userWon ? "rgba(16,185,129,0.3)" : isDraw ? "rgba(161,161,170,0.2)" : "rgba(239,68,68,0.3)" }}>
+                  <span className={`text-[10px] font-mono uppercase tracking-[0.3em] ${userWon ? "text-emerald-500" : isDraw ? "text-zinc-500" : "text-red-500"}`}>
+                    {userWon ? "Victory" : isDraw ? "Draw" : "Defeat"}
                   </span>
                 </div>
 
-                <div className={`text-6xl font-black uppercase tracking-tighter mb-2 ${userWon ? "text-emerald-400" : "text-red-400"}`}
-                  style={{ textShadow: userWon ? "0 0 40px rgba(16,185,129,0.3)" : "0 0 40px rgba(239,68,68,0.3)" }}>
-                  {userWon ? "You won" : "AI wins"}
+                <div className={`text-6xl font-black uppercase tracking-tighter mb-2 ${userWon ? "text-emerald-400" : isDraw ? "text-zinc-400" : "text-red-400"}`}
+                  style={{ textShadow: userWon ? "0 0 40px rgba(16,185,129,0.3)" : isDraw ? "none" : "0 0 40px rgba(239,68,68,0.3)" }}>
+                  {userWon ? "You won" : isDraw ? "It's a draw" : "AI wins"}
                 </div>
-                <div className="text-3xl mb-5">{userWon ? "🏆" : "🤖"}</div>
+                <div className="text-3xl mb-5">{userWon ? "🏆" : isDraw ? "🤝" : "🤖"}</div>
                 <p className="text-zinc-400 text-sm leading-relaxed max-w-md mx-auto">{verdict.reasoning}</p>
 
                 {/* Score totals */}
                 <div className="flex justify-center gap-8 mt-8 pt-6 border-t border-zinc-900">
                   {[
                     { label: "You", score: userTotal, highlight: userWon, color: "emerald" },
-                    { label: "agAInst", score: aiTotal, highlight: !userWon, color: "red" },
+                    { label: "agAInst", score: aiTotal, highlight: !userWon && !isDraw, color: "red" },
                   ].map((side, i) => (
                     <div key={i} className="text-center">
                       <div className={`text-3xl font-black mb-1 ${side.highlight
                         ? side.color === "emerald" ? "text-emerald-400" : "text-red-400"
-                        : "text-zinc-600"}`}>
+                        : isDraw ? "text-zinc-500" : "text-zinc-600"}`}>
                         {side.score}
                       </div>
                       <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-600">{side.label}</div>
