@@ -12,6 +12,11 @@ import {
 import { pvpJudge } from "@/lib/api"
 
 const ROUND_NAMES = ["Opening", "Rebuttal", "Closing"]
+const ROUND_HINTS = [
+  "Make your opening argument...",
+  "Rebut your opponent...",
+  "Make your closing statement...",
+]
 const CHAR_LIMIT = 400
 
 export default function OnlinePvPRoomPage() {
@@ -23,11 +28,11 @@ export default function OnlinePvPRoomPage() {
   const [input, setInput] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
   const playerId = useRef(getPlayerId())
   const judgeTriggered = useRef(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Determine which player we are from localStorage
   const myRole = typeof window !== "undefined"
     ? localStorage.getItem(`room_player_${code}`) as "player1" | "player2" | null
     : null
@@ -49,23 +54,14 @@ export default function OnlinePvPRoomPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [room?.rounds, room?.status])
 
-  // Player 1 triggers judging — fetch fresh room to avoid stale rounds
   useEffect(() => {
     if (!room || room.status !== "judging" || !isPlayer1 || judgeTriggered.current) return
     judgeTriggered.current = true
 
     async function runJudge() {
-      // Always fetch fresh from Supabase so rounds are guaranteed populated
       const freshRoom = await getRoom(code as string)
       if (!freshRoom) { console.error("[pvp judge] could not fetch fresh room"); return }
-
-      console.log("[pvp judge] rounds count:", freshRoom.rounds.length)
-      console.log("[pvp judge] rounds:", JSON.stringify(freshRoom.rounds))
-
-      if (freshRoom.rounds.length === 0) {
-        console.error("[pvp judge] rounds still empty after fresh fetch — aborting")
-        return
-      }
+      if (freshRoom.rounds.length === 0) { console.error("[pvp judge] rounds empty — aborting"); return }
 
       const history = freshRoom.rounds.flatMap(r => [
         { role: "user" as const, content: `${freshRoom.player1_name}: ${r.player1Argument}` },
@@ -82,10 +78,7 @@ export default function OnlinePvPRoomPage() {
         })
         const { getSupabaseClient } = await import("@/lib/supabase")
         const supabase = getSupabaseClient()
-        await supabase
-          .from("online_pvp_rooms")
-          .update({ verdict, status: "complete" })
-          .eq("code", code)
+        await supabase.from("online_pvp_rooms").update({ verdict, status: "complete" }).eq("code", code)
       } catch (e) {
         console.error("[pvp judge] judge call failed:", e)
       }
@@ -94,7 +87,6 @@ export default function OnlinePvPRoomPage() {
     runJudge()
   }, [room?.status, isPlayer1, code])
 
-  // Redirect both players to verdict when complete
   useEffect(() => {
     if (room?.status === "complete" && room.verdict) {
       setTimeout(() => router.push(`/online-pvp/verdict/${code}`), 800)
@@ -116,9 +108,26 @@ export default function OnlinePvPRoomPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  function copyCode() {
+    if (!room) return
+    navigator.clipboard.writeText(room.code)
+    setCodeCopied(true)
+    setTimeout(() => setCodeCopied(false), 2000)
+  }
+
   if (loading) return (
     <main className="min-h-screen bg-[#080808] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-red-500/50 border-t-red-500 rounded-full animate-spin" />
+      <div className="fixed inset-0 opacity-[0.025] pointer-events-none" style={{
+        backgroundImage: `linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)`,
+        backgroundSize: "60px 60px",
+      }} />
+      <div className="text-center space-y-3 relative z-10">
+        <div className="relative w-12 h-12 mx-auto">
+          <div className="absolute inset-0 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+          <div className="absolute inset-2 border-2 border-zinc-800 border-b-zinc-500 rounded-full animate-spin [animation-direction:reverse] [animation-duration:0.7s]" />
+        </div>
+        <p className="text-zinc-600 text-[11px] font-mono uppercase tracking-[0.3em]">Connecting...</p>
+      </div>
     </main>
   )
 
@@ -137,27 +146,55 @@ export default function OnlinePvPRoomPage() {
   const waitingForThem = !!myPendingSubmit && !theirPendingSubmit
 
   return (
-    <main className="min-h-screen bg-[#080808] text-white flex flex-col">
+    <main className="min-h-screen bg-[#080808] text-white flex flex-col selection:bg-red-500/30 selection:text-red-200">
 
-      {/* Header */}
-      <div className="border-b border-white/5 px-6 py-4 flex items-center justify-between sticky top-0 bg-[#080808]/90 backdrop-blur-sm z-10">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
+      {/* ─── BG TEXTURE ─── */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-[0.025]" style={{
+          backgroundImage: `linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)`,
+          backgroundSize: "60px 60px",
+        }} />
+      </div>
+
+      {/* ─── HEADER ─── */}
+      <div className="relative z-20 border-b border-zinc-900 px-5 py-3.5 flex items-center justify-between sticky top-0 bg-[#080808]/95 backdrop-blur-md">
+        <div className="flex items-center gap-4 min-w-0">
+          {/* Mode badge */}
+          <div className="hidden sm:flex items-center gap-1.5 border border-zinc-800 px-2.5 py-1.5 flex-shrink-0">
             <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs text-zinc-500">Online PvP</span>
-            <span className="text-zinc-700">·</span>
-            <span className="text-xs font-mono text-zinc-500">{room.code}</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Online</span>
+            <span className="text-zinc-700 font-mono">·</span>
+            <span className="text-[10px] font-mono text-zinc-600 tracking-widest">{room.code}</span>
           </div>
-          <p className="text-sm font-medium text-white truncate max-w-xs">{room.topic}</p>
+
+          {/* Topic */}
+          <div className="min-w-0">
+            <p className="text-white font-bold text-sm truncate max-w-[200px] sm:max-w-xs">{room.topic}</p>
+            {room.status !== "waiting" && room.player2_name && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] font-mono text-red-500">{room.player1_name}</span>
+                <span className="text-[10px] font-mono text-zinc-700">FOR —</span>
+                <span className="text-[10px] font-mono text-blue-500">{room.player2_name}</span>
+                <span className="text-[10px] font-mono text-zinc-700">AGAINST</span>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Round pips */}
           {currentRoundNumber > 0 && currentRoundNumber <= 3 && (
-            <div className="flex gap-1.5 mr-2">
+            <div className="flex gap-1.5 items-center">
               {[1, 2, 3].map(r => (
-                <div key={r} className={`w-6 h-1 rounded-full transition-colors ${
-                  r < currentRoundNumber ? "bg-red-500" :
-                  r === currentRoundNumber ? "bg-white" : "bg-zinc-800"
-                }`} />
+                <div key={r} className="flex flex-col items-center gap-1">
+                  <div className={`w-7 h-px transition-colors ${
+                    r < currentRoundNumber ? "bg-red-500" :
+                    r === currentRoundNumber ? "bg-white" : "bg-zinc-800"
+                  }`} />
+                  <span className={`text-[9px] font-mono uppercase ${
+                    r <= currentRoundNumber ? "text-zinc-600" : "text-zinc-800"
+                  }`}>{ROUND_NAMES[r - 1]}</span>
+                </div>
               ))}
             </div>
           )}
@@ -165,171 +202,252 @@ export default function OnlinePvPRoomPage() {
         </div>
       </div>
 
-      {/* Thread */}
-      <div className="flex-1 overflow-y-auto px-4 py-8 max-w-2xl w-full mx-auto space-y-6">
+      {/* ─── THREAD ─── */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-8 max-w-2xl w-full mx-auto space-y-6">
 
         {/* Waiting for opponent */}
         {room.status === "waiting" && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            className="text-center py-16 space-y-6">
-            <div className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-dashed border-zinc-600 flex items-center justify-center text-2xl mx-auto animate-pulse">?</div>
-            <div>
-              <p className="text-white font-bold text-lg mb-1">Waiting for opponent…</p>
-              <p className="text-zinc-500 text-sm">Share the room code or link</p>
+            className="text-center py-12 space-y-8">
+
+            {/* Pulsing waiting indicator */}
+            <div className="relative w-20 h-20 mx-auto">
+              <div className="absolute inset-0 border border-zinc-800 rotate-45" />
+              <div className="absolute inset-3 border border-dashed border-zinc-700 rotate-45 animate-spin [animation-duration:8s]" />
+              <div className="absolute inset-0 flex items-center justify-center text-2xl font-black text-zinc-600">?</div>
             </div>
-            <div className="flex flex-col gap-3 max-w-xs mx-auto">
-              <div className="flex items-center justify-between px-5 py-4 bg-zinc-900 border border-zinc-700 rounded-xl">
-                <span className="font-mono text-3xl font-black tracking-widest text-white">{room.code}</span>
-                <button onClick={() => { navigator.clipboard.writeText(room.code); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                  {copied ? "✓" : "Copy"}
+
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-zinc-600 mb-2">Awaiting Opponent</p>
+              <p className="text-white font-black text-xl uppercase tracking-tight mb-1">Waiting for player 2</p>
+              <p className="text-zinc-600 text-sm font-mono">Share the code or link below</p>
+            </div>
+
+            {/* Room code display */}
+            <div className="max-w-xs mx-auto space-y-2">
+              <div className="flex items-center justify-between border border-zinc-800 bg-zinc-900/50 px-5 py-4 relative">
+                <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-zinc-700" />
+                <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-zinc-700" />
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-700 mb-1">Room Code</p>
+                  <span className="font-mono text-3xl font-black tracking-[0.3em] text-white">{room.code}</span>
+                </div>
+                <button onClick={copyCode}
+                  className={`text-[10px] font-mono uppercase tracking-widest transition-colors px-3 py-1.5 border ${
+                    codeCopied
+                      ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5"
+                      : "text-zinc-600 border-zinc-800 hover:text-zinc-400 hover:border-zinc-700"
+                  }`}>
+                  {codeCopied ? "✓ Copied" : "Copy"}
                 </button>
               </div>
+
               <button onClick={copyShareLink}
-                className="flex items-center justify-center gap-2 px-5 py-3 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 rounded-xl text-sm text-zinc-400 hover:text-white transition-all">
-                🔗 {copied ? "Copied!" : "Copy invite link"}
+                className="w-full flex items-center justify-center gap-2 border border-zinc-800 hover:border-zinc-600 bg-zinc-900/30 hover:bg-zinc-900/60 py-3 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-all">
+                🔗 {copied ? "Link copied!" : "Copy invite link"}
               </button>
             </div>
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 max-w-xs mx-auto text-left">
-              <p className="text-xs text-zinc-500 mb-2">You are playing as:</p>
-              <p className="text-white font-semibold">{room.player1_name}</p>
-              <p className={`text-xs mt-1 font-medium ${room.player1_side === "for" ? "text-red-400" : "text-blue-400"}`}>
-                {room.player1_side === "for" ? "✅ FOR" : "❌ AGAINST"}
-              </p>
+
+            {/* Your identity */}
+            <div className="border border-zinc-800 bg-zinc-900/30 p-4 max-w-xs mx-auto text-left relative">
+              <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-zinc-700" />
+              <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-700 mb-3">You are playing as</p>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-red-600 flex items-center justify-center text-sm font-black text-white">
+                  {room.player1_name[0].toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-white font-bold text-sm">{room.player1_name}</p>
+                  <p className={`text-[10px] font-mono uppercase tracking-widest mt-0.5 ${
+                    room.player1_side === "for" ? "text-emerald-500" : "text-red-500"
+                  }`}>
+                    {room.player1_side}
+                  </p>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
 
-        {/* Player joined banner */}
+        {/* Players joined banner */}
         {room.status !== "waiting" && room.player2_name && (
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex-1 h-px bg-zinc-800" />
-            <div className="text-xs text-zinc-500 flex items-center gap-2">
-              <span className="text-red-400 font-medium">{room.player1_name}</span>
-              <span>FOR</span>
-              <span className="text-zinc-700">vs</span>
-              <span className="text-blue-400 font-medium">{room.player2_name}</span>
-              <span>AGAINST</span>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-zinc-900" />
+            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest">
+              <span className="text-red-500">{room.player1_name}</span>
+              <span className="text-zinc-800">for</span>
+              <span className="text-zinc-800">—</span>
+              <span className="text-blue-500">{room.player2_name}</span>
+              <span className="text-zinc-800">against</span>
             </div>
-            <div className="flex-1 h-px bg-zinc-800" />
+            <div className="flex-1 h-px bg-zinc-900" />
           </div>
         )}
 
         {/* Completed rounds */}
         {room.rounds.map((round, i) => (
           <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+
+            {/* Round label */}
             <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-800/60" />
-              <span className="text-zinc-600 text-xs uppercase tracking-widest">{ROUND_NAMES[round.number - 1]}</span>
-              <div className="h-px flex-1 bg-zinc-800/60" />
+              <div className="flex-1 h-px bg-zinc-900" />
+              <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-700">
+                {ROUND_NAMES[round.number - 1]}
+              </span>
+              <div className="flex-1 h-px bg-zinc-900" />
             </div>
-            <motion.div className="flex gap-3 flex-row-reverse" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }}>
-              <div className="w-7 h-7 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold text-red-400">
-                {room.player1_name[0]}
+
+            {/* P1 argument */}
+            <motion.div className="flex gap-3 flex-row-reverse"
+              initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}>
+              <div className="w-7 h-7 bg-red-600/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-black text-red-400">
+                {room.player1_name[0].toUpperCase()}
               </div>
-              <div className="bg-red-500/8 border border-red-500/15 rounded-2xl rounded-tr-sm px-5 py-4 max-w-lg">
-                <p className="text-xs text-red-400 font-medium mb-2">{room.player1_name} · FOR</p>
+              <div className="border border-red-500/15 bg-red-500/5 px-5 py-4 max-w-lg relative">
+                <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-red-500/20" />
+                <p className="text-[10px] font-mono uppercase tracking-widest text-red-500 mb-2">
+                  {room.player1_name} · For
+                </p>
                 <p className="text-zinc-200 text-sm leading-relaxed">{round.player1Argument}</p>
               </div>
             </motion.div>
-            <motion.div className="flex gap-3" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-              <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold text-blue-400">
-                {room.player2_name?.[0]}
+
+            {/* P2 argument */}
+            <motion.div className="flex gap-3"
+              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 }}>
+              <div className="w-7 h-7 bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-1 text-xs font-black text-blue-400">
+                {room.player2_name?.[0].toUpperCase()}
               </div>
-              <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl rounded-tl-sm px-5 py-4 max-w-lg">
-                <p className="text-xs text-blue-400 font-medium mb-2">{room.player2_name} · AGAINST</p>
+              <div className="border border-blue-500/15 bg-blue-500/5 px-5 py-4 max-w-lg relative">
+                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-blue-500/20" />
+                <p className="text-[10px] font-mono uppercase tracking-widest text-blue-500 mb-2">
+                  {room.player2_name} · Against
+                </p>
                 <p className="text-zinc-200 text-sm leading-relaxed">{round.player2Argument}</p>
               </div>
             </motion.div>
+
           </motion.div>
         ))}
 
-        {/* Current round — show my pending submission */}
+        {/* My pending submission */}
         {room.status.startsWith("round") && myPendingSubmit && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className={`flex gap-3 ${isPlayer1 ? "flex-row-reverse" : ""}`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-1 text-xs font-bold ${
-              isPlayer1 ? "bg-red-500/20 border border-red-500/30 text-red-400" : "bg-blue-500/20 border border-blue-500/30 text-blue-400"
+            <div className={`w-7 h-7 border flex items-center justify-center flex-shrink-0 mt-1 text-xs font-black ${
+              isPlayer1
+                ? "bg-red-600/20 border-red-500/30 text-red-400"
+                : "bg-blue-600/20 border-blue-500/30 text-blue-400"
             }`}>
-              {myName?.[0]}
+              {myName?.[0].toUpperCase()}
             </div>
-            <div className={`border rounded-2xl px-5 py-4 max-w-lg opacity-60 ${
-              isPlayer1 ? "bg-red-500/8 border-red-500/15 rounded-tr-sm" : "bg-blue-500/5 border-blue-500/10 rounded-tl-sm"
+            <div className={`border px-5 py-4 max-w-lg opacity-50 ${
+              isPlayer1
+                ? "border-red-500/15 bg-red-500/5"
+                : "border-blue-500/15 bg-blue-500/5"
             }`}>
-              <p className={`text-xs font-medium mb-2 ${isPlayer1 ? "text-red-400" : "text-blue-400"}`}>
-                {myName} · submitted ✓
+              <p className={`text-[10px] font-mono uppercase tracking-widest mb-2 flex items-center gap-2 ${
+                isPlayer1 ? "text-red-500" : "text-blue-500"
+              }`}>
+                {myName} · submitted
+                <span className="text-emerald-500">✓</span>
               </p>
               <p className="text-zinc-400 text-sm leading-relaxed">{myPendingSubmit}</p>
             </div>
           </motion.div>
         )}
 
-        {/* Waiting for them */}
+        {/* Waiting for opponent */}
         {waitingForThem && (
-          <div className="flex items-center gap-3 text-zinc-500 text-sm py-2">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="flex items-center gap-3 py-2">
             <div className="flex gap-1">
-              {[0,1,2].map(i => (
-                <div key={i} className="w-1.5 h-1.5 bg-zinc-600 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              {[0, 1, 2].map(i => (
+                <div key={i} className="w-1.5 h-1.5 bg-zinc-700 rounded-full animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }} />
               ))}
             </div>
-            <span>Waiting for {theirName}…</span>
-          </div>
+            <span className="text-zinc-600 text-xs font-mono uppercase tracking-widest">
+              Waiting for {theirName}…
+            </span>
+          </motion.div>
         )}
 
         {/* Judging */}
         {room.status === "judging" && (
-          <div className="text-center py-8 space-y-3">
-            <div className="w-8 h-8 border-2 border-red-500/50 border-t-red-500 rounded-full animate-spin mx-auto" />
-            <p className="text-zinc-500 text-sm">Debate complete — judge is deliberating…</p>
+          <div className="text-center py-10 space-y-4">
+            <div className="relative w-12 h-12 mx-auto">
+              <div className="absolute inset-0 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+              <div className="absolute inset-2 border-2 border-zinc-800 border-b-zinc-500 rounded-full animate-spin [animation-direction:reverse] [animation-duration:0.7s]" />
+            </div>
+            <p className="text-zinc-600 text-[11px] font-mono uppercase tracking-[0.3em]">
+              Debate complete — judge deliberating…
+            </p>
           </div>
         )}
 
         {room.status === "complete" && (
           <div className="text-center py-4">
-            <p className="text-zinc-500 text-sm">Redirecting to verdict…</p>
+            <p className="text-zinc-600 text-[11px] font-mono uppercase tracking-widest">
+              Redirecting to verdict…
+            </p>
           </div>
         )}
 
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* ─── INPUT ─── */}
       {canSubmit && room.status !== "waiting" && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="border-t border-white/5 bg-[#080808]/90 backdrop-blur-sm px-4 py-4 max-w-2xl w-full mx-auto">
-          <div className={`rounded-2xl overflow-hidden border transition-colors ${
-            isPlayer1 ? "bg-zinc-900 border-zinc-800 focus-within:border-red-500/40"
-                      : "bg-zinc-900 border-zinc-800 focus-within:border-blue-500/40"
+          className="relative z-20 border-t border-zinc-900 bg-[#080808]/95 backdrop-blur-md px-4 py-4 max-w-2xl w-full mx-auto">
+
+          {/* Player identity strip */}
+          <div className={`flex items-center gap-2 mb-2 text-[10px] font-mono uppercase tracking-widest ${
+            isPlayer1 ? "text-red-500" : "text-blue-500"
           }`}>
-            <div className={`px-5 pt-3 pb-1 text-xs font-medium flex items-center gap-2 ${isPlayer1 ? "text-red-400" : "text-blue-400"}`}>
-              <span>{myName}</span>
-              <span className="text-zinc-600">·</span>
-              <span className="uppercase text-zinc-500">{mySide}</span>
-              <span className="text-zinc-600">·</span>
-              <span className="text-zinc-500">{ROUND_NAMES[currentRoundNumber - 1]}</span>
-            </div>
+            <div className={`w-1.5 h-1.5 rounded-full ${isPlayer1 ? "bg-red-500" : "bg-blue-500"}`} />
+            {myName}
+            <span className="text-zinc-700">·</span>
+            <span className="text-zinc-600">{mySide}</span>
+            <span className="text-zinc-700">·</span>
+            <span className="text-zinc-600">{ROUND_NAMES[currentRoundNumber - 1]}</span>
+          </div>
+
+          <div className={`border bg-zinc-900/60 transition-colors focus-within:bg-zinc-900 ${
+            isPlayer1
+              ? "border-zinc-800 focus-within:border-red-500/30"
+              : "border-zinc-800 focus-within:border-blue-500/30"
+          }`}>
             <textarea
               value={input}
               onChange={e => setInput(e.target.value.slice(0, CHAR_LIMIT))}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit() } }}
-              placeholder={
-                currentRoundNumber === 1 ? "Make your opening argument..." :
-                currentRoundNumber === 2 ? "Rebut your opponent..." : "Make your closing statement..."
-              }
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit() }
+              }}
+              placeholder={ROUND_HINTS[currentRoundNumber - 1]}
               rows={3}
-              className="w-full bg-transparent px-5 py-2 text-white placeholder-zinc-600 text-sm focus:outline-none resize-none leading-relaxed"
+              className="w-full bg-transparent px-4 pt-4 pb-2 text-white placeholder-zinc-700 text-sm focus:outline-none resize-none leading-relaxed"
             />
-            <div className="flex items-center justify-between px-5 pb-3">
-              <span className="text-xs text-zinc-600">{CHAR_LIMIT - input.length} chars left</span>
+            <div className="flex items-center justify-between px-4 pb-3">
+              <span className={`text-xs font-mono transition-colors ${
+                CHAR_LIMIT - input.length < 60 ? "text-red-400" : "text-zinc-700"
+              }`}>
+                {CHAR_LIMIT - input.length}
+              </span>
               <button onClick={handleSubmit} disabled={!input.trim() || submitting}
-                className={`px-4 py-1.5 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-30 ${
-                  isPlayer1 ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"
+                className={`px-5 py-2 text-white text-xs font-black uppercase tracking-widest transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-[0.98] ${
+                  isPlayer1
+                    ? "bg-red-600 hover:bg-red-700 hover:shadow-[0_0_15px_rgba(220,38,38,0.3)]"
+                    : "bg-blue-600 hover:bg-blue-700 hover:shadow-[0_0_15px_rgba(37,99,235,0.3)]"
                 }`}>
-                Submit →
+                {submitting ? "Sending…" : "Submit →"}
               </button>
             </div>
           </div>
-          <p className="text-zinc-700 text-xs mt-2 text-center">Both players submit independently — you can submit in any order</p>
+          <p className="text-zinc-800 text-[10px] font-mono mt-2 text-center uppercase tracking-widest">
+            Both players submit independently · Enter to submit
+          </p>
         </motion.div>
       )}
     </main>
