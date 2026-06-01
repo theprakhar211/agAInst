@@ -51,7 +51,7 @@ export default function PvPVerdictPage() {
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
             <Image src="/logo3.png" alt="agAInst logo" width={56} height={56} priority className="rounded-md" />
             <span className="text-xl font-black tracking-tighter uppercase hidden sm:block">
-              ag<span className="text-red-600">AIN</span>st
+              ag<span className="text-red-600">AI</span>nst
             </span>
           </div>
           <div className="flex items-center gap-3">
