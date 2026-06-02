@@ -44,7 +44,9 @@ function LobbyContent() {
   async function handleJoin() {
     const code = joinCode.trim()
     const name = playerName.trim()
-    if (!code || !name) return
+    // When joining via share token, code is empty — that's fine
+    if (!name) return
+    if (!shareToken && !code) return
     setLoading(true); setError(null)
     const playerId = getPlayerId()
     const { room, error } = shareToken
