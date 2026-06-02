@@ -21,6 +21,7 @@ export interface OnlinePvPRoom {
   verdict: any | null
   created_at: string
   expires_at: string
+  last_active_at: string | null
 }
 
 export interface RoomRound {
@@ -68,6 +69,7 @@ export async function createRoom(
       player1_name: playerName,
       player1_side: playerSide,
       status: 'waiting',
+      last_active_at: new Date().toISOString(),
     })
     .select()
     .single()
@@ -105,6 +107,7 @@ export async function joinRoom(
       player2_side: player2Side,
       status: 'round1',
       current_turn: 'player1',
+      last_active_at: new Date().toISOString(),
     })
     .eq('code', code)
     .select()
@@ -179,6 +182,7 @@ export async function submitArgument(
         p2_submitted: null,
         status: nextStatus,
         current_turn: 'player1',
+        last_active_at: new Date().toISOString(),
       })
       .eq('code', code)
 
@@ -186,8 +190,8 @@ export async function submitArgument(
   } else {
     // Only one submitted so far — save their arg and wait
     const update = isP1
-      ? { p1_submitted: argument, current_turn: 'player2' as const }
-      : { p2_submitted: argument, current_turn: 'player1' as const }
+      ? { p1_submitted: argument, current_turn: 'player2' as const, last_active_at: new Date().toISOString() }
+      : { p2_submitted: argument, current_turn: 'player1' as const, last_active_at: new Date().toISOString() }
 
     const { error } = await supabase
       .from('online_pvp_rooms')
