@@ -259,7 +259,7 @@ But beyond the demo moment, here's what this project actually demonstrates:
 - [x] 📚 Local debate history
 - [x] 🔥 Trending topics via web search
 - [x] 👤 User accounts + cloud history
-- [ ] 🏆 Global leaderboard
+- [x] 🏆 Global leaderboard
 - [ ] 🎙️ Voice input support
 
 ---
