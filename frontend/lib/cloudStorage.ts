@@ -162,6 +162,37 @@ export function getVerdict(debateId: string) {
   return lsGetVerdict(debateId)
 }
 
+// ─── Public verdict fetch (no auth required) ─────────────────
+// Used for shareable verdict links — fetches debate + verdict
+// from Supabase without requiring the viewer to be the owner.
+
+export async function getDebatePublic(id: string): Promise<{
+  session: DebateSession | null
+  verdict: object | null
+}> {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('debates')
+    .select('id, topic, user_side, rounds, status, ai_goes_first, created_at, verdict')
+    .eq('id', id)
+    .eq('status', 'complete')  // only share completed debates
+    .single()
+
+  if (error || !data) return { session: null, verdict: null }
+
+  const session: DebateSession = {
+    id: data.id,
+    topic: data.topic,
+    userSide: data.user_side as DebateSession['userSide'],
+    rounds: (data.rounds as DebateSession['rounds']) ?? [],
+    status: data.status as DebateSession['status'],
+    createdAt: data.created_at,
+    aiGoesFirst: data.ai_goes_first,
+  }
+
+  return { session, verdict: data.verdict ?? null }
+}
+
 // ─── PvPSession ──────────────────────────────────────────────
 
 export async function savePvPSession(session: PvPSession): Promise<void> {

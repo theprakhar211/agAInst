@@ -6,7 +6,7 @@ import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { judge } from "@/lib/api"
 import { DebateSession } from "@/lib/types"
-import { getDebate, getVerdict, saveVerdict, saveDebate } from "@/lib/cloudStorage"
+import { getDebate, getVerdict, saveVerdict, saveDebate, getDebatePublic } from "@/lib/cloudStorage"
 import { UserMenu } from "@/components/UserMenu"
 import Image from "next/image"
 
@@ -32,34 +32,53 @@ export default function VerdictPage() {
   const [verdict, setVerdict] = useState<Verdict | null>(null)
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [isSharedView, setIsSharedView] = useState(false)
 
   useEffect(() => {
     async function load() {
+      // Try fetching as the owner first (has full access incl. localStorage)
       const s = await getDebate(id as string)
-      if (!s || s.status !== "complete") { router.push("/"); return }
-      setSession(s)
 
-      const cached = getVerdict(id as string)
-      if (cached) { setVerdict(cached); setLoading(false); return }
+      if (s && s.status === "complete") {
+        // Owner view — normal flow
+        setSession(s)
+        const cached = getVerdict(id as string)
+        if (cached) { setVerdict(cached); setLoading(false); return }
 
-      const history = (s.rounds || []).flatMap(r => {
-        const items: { role: "user" | "assistant"; content: string }[] = []
-        if (r.userArgument) items.push({ role: "user", content: r.userArgument })
-        if (r.aiArgument) items.push({ role: "assistant", content: r.aiArgument })
-        return items
-      })
-
-      setApiError(null)
-      judge({ topic: s.topic, user_side: s.userSide, history })
-        .then(v => {
-          if (v && (v.user_scores || v.winner)) { saveVerdict(id as string, v); setVerdict(v) }
-          else throw new Error("Invalid verdict format returned from AI model.")
+        // Need to run judge
+        const history = (s.rounds || []).flatMap(r => {
+          const items: { role: "user" | "assistant"; content: string }[] = []
+          if (r.userArgument) items.push({ role: "user", content: r.userArgument })
+          if (r.aiArgument) items.push({ role: "assistant", content: r.aiArgument })
+          return items
         })
-        .catch(err => {
-          console.error("Deliberation route failed:", err)
-          setApiError("The evaluation AI experienced a temporary connection glitch or JSON timeout. Please try refreshing or click below to retry.")
-        })
-        .finally(() => setLoading(false))
+
+        setApiError(null)
+        judge({ topic: s.topic, user_side: s.userSide, history })
+          .then(v => {
+            if (v && (v.user_scores || v.winner)) { saveVerdict(id as string, v); setVerdict(v) }
+            else throw new Error("Invalid verdict format returned from AI model.")
+          })
+          .catch(err => {
+            console.error("Deliberation route failed:", err)
+            setApiError("The evaluation AI experienced a temporary connection glitch or JSON timeout. Please try refreshing or click below to retry.")
+          })
+          .finally(() => setLoading(false))
+        return
+      }
+
+      // Not the owner — try public fetch (shared link)
+      const { session: publicSession, verdict: publicVerdict } = await getDebatePublic(id as string)
+      if (!publicSession) { router.push("/"); return }
+
+      setIsSharedView(true)
+      setSession(publicSession)
+      if (publicVerdict) {
+        setVerdict(publicVerdict as Verdict)
+      } else {
+        setApiError("This verdict hasn't been generated yet. Ask the debate owner to open their verdict page first.")
+      }
+      setLoading(false)
     }
     load()
   }, [id, router])
@@ -347,24 +366,49 @@ export default function VerdictPage() {
             {/* ─── Actions ─── */}
             <motion.div className="space-y-2 mt-6"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}>
-              <button onClick={startSideFlip}
-                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-sm uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.3)] active:scale-[0.99] flex items-center justify-center gap-2">
-                🔄 Flip sides — argue the other position
-              </button>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={shareDebate}
-                  className="py-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all text-xs font-mono uppercase tracking-widest">
-                  📸 Save image
-                </button>
-                <button onClick={exportPDF}
-                  className="py-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all text-xs font-mono uppercase tracking-widest">
-                  📄 Export PDF
-                </button>
-              </div>
-              <button onClick={() => router.push("/")}
-                className="w-full py-3.5 border border-zinc-800 hover:border-zinc-600 text-zinc-600 hover:text-zinc-400 transition-all text-xs font-mono uppercase tracking-widest">
-                ← Debate another topic
-              </button>
+
+              {/* Shared view — viewer can't flip sides or export */}
+              {isSharedView ? (
+                <>
+                  <div className="border border-zinc-800 bg-zinc-900/30 p-4 text-center relative">
+                    <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-zinc-700" />
+                    <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-zinc-700" />
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-600 mb-3">
+                      Shared verdict — read only
+                    </p>
+                    <p className="text-zinc-500 text-xs">Want to debate this topic yourself?</p>
+                  </div>
+                  <button onClick={() => router.push(`/?topic=${encodeURIComponent(session?.topic ?? "")}`)}
+                    className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-sm uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.3)] active:scale-[0.99]">
+                    ⚔️ Debate this topic →
+                  </button>
+                  <button onClick={() => router.push("/")}
+                    className="w-full py-3.5 border border-zinc-800 hover:border-zinc-600 text-zinc-600 hover:text-zinc-400 transition-all text-xs font-mono uppercase tracking-widest">
+                    ← Go to arena
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={startSideFlip}
+                    className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-sm uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.3)] active:scale-[0.99] flex items-center justify-center gap-2">
+                    🔄 Flip sides — argue the other position
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={shareDebate}
+                      className="py-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all text-xs font-mono uppercase tracking-widest">
+                      📸 Save image
+                    </button>
+                    <button onClick={exportPDF}
+                      className="py-3.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all text-xs font-mono uppercase tracking-widest">
+                      📄 Export PDF
+                    </button>
+                  </div>
+                  <button onClick={() => router.push("/")}
+                    className="w-full py-3.5 border border-zinc-800 hover:border-zinc-600 text-zinc-600 hover:text-zinc-400 transition-all text-xs font-mono uppercase tracking-widest">
+                    ← Debate another topic
+                  </button>
+                </>
+              )}
             </motion.div>
 
           </motion.div>
