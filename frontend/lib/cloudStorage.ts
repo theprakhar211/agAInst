@@ -27,11 +27,10 @@ import type { DebateSession, PvPSession } from './types'
 
 // ─── helpers ────────────────────────────────────────────────
 
-function getCurrentUserId(): string | null {
-  // Sync read — the supabase client caches the session
+async function getCurrentUserId(): Promise<string | null> {
   const supabase = getSupabaseClient()
-  // @ts-ignore — internal sync access
-  return supabase.auth._session?.user?.id ?? null
+  const { data } = await supabase.auth.getSession()
+  return data.session?.user?.id ?? null
 }
 
 // ─── DebateSession ───────────────────────────────────────────
@@ -40,7 +39,7 @@ export async function saveDebate(session: DebateSession): Promise<void> {
   // Always write localStorage first (instant, no await needed)
   lsSaveDebate(session)
 
-  const userId = getCurrentUserId()
+  const userId = await getCurrentUserId()
   if (!userId) return
 
   const supabase = getSupabaseClient()
@@ -63,22 +62,40 @@ export async function saveVerdict(debateId: string, verdict: object): Promise<vo
   // Always write localStorage first
   lsSaveVerdict(debateId, verdict)
 
-  const userId = getCurrentUserId()
-  if (!userId) return
-
   const supabase = getSupabaseClient()
-  // Update the verdict column + mark complete on the existing row
-  const { error } = await supabase
-    .from('debates')
-    .update({ verdict, status: 'complete' })
-    .eq('id', debateId)
-    .eq('user_id', userId)
+  const userId = await getCurrentUserId()
 
-  if (error) console.error('[cloudStorage] saveVerdict failed:', error.message)
+  if (userId) {
+    // Logged-in — update existing row owned by this user
+    const { error } = await supabase
+      .from('debates')
+      .update({ verdict, status: 'complete' })
+      .eq('id', debateId)
+      .eq('user_id', userId)
+    if (error) console.error('[cloudStorage] saveVerdict failed:', error.message)
+  } else {
+    // Guest — upsert full debate so verdict is publicly accessible via share link
+    const session = lsGetDebate(debateId)
+    if (!session) return
+    const { error } = await supabase
+      .from('debates')
+      .upsert({
+        id: session.id,
+        user_id: null,
+        topic: session.topic,
+        user_side: session.userSide,
+        status: 'complete',
+        ai_goes_first: session.aiGoesFirst,
+        created_at: session.createdAt,
+        rounds: session.rounds,
+        verdict,
+      }, { onConflict: 'id' })
+    if (error) console.error('[cloudStorage] saveVerdict (guest) failed:', error.message)
+  }
 }
 
 export async function getAllDebates(): Promise<DebateSession[]> {
-  const userId = getCurrentUserId()
+  const userId = await getCurrentUserId()
 
   if (!userId) {
     // Guest — return localStorage as before
@@ -126,7 +143,7 @@ export async function getAllDebates(): Promise<DebateSession[]> {
 }
 
 export async function getDebate(id: string): Promise<DebateSession | null> {
-  const userId = getCurrentUserId()
+  const userId = await getCurrentUserId()
 
   if (!userId) return lsGetDebate(id)
 
@@ -176,7 +193,7 @@ export async function getDebatePublic(id: string): Promise<{
     .select('id, topic, user_side, rounds, status, ai_goes_first, created_at, verdict')
     .eq('id', id)
     .eq('status', 'complete')  // only share completed debates
-    .single()
+    .maybeSingle()
 
   if (error || !data) return { session: null, verdict: null }
 
@@ -198,7 +215,7 @@ export async function getDebatePublic(id: string): Promise<{
 export async function savePvPSession(session: PvPSession): Promise<void> {
   lsSavePvPSession(session)
 
-  const userId = getCurrentUserId()
+  const userId = await getCurrentUserId()
   if (!userId) return
 
   const supabase = getSupabaseClient()
@@ -221,7 +238,7 @@ export async function savePvPSession(session: PvPSession): Promise<void> {
 export async function savePvPVerdict(sessionId: string, verdict: object): Promise<void> {
   lsSaveVerdict(sessionId, verdict)
 
-  const userId = getCurrentUserId()
+  const userId = await getCurrentUserId()
   if (!userId) return
 
   const supabase = getSupabaseClient()
@@ -235,7 +252,7 @@ export async function savePvPVerdict(sessionId: string, verdict: object): Promis
 }
 
 export async function getAllPvPSessions(): Promise<PvPSession[]> {
-  const userId = getCurrentUserId()
+  const userId = await getCurrentUserId()
   if (!userId) return lsGetAllPvPSessions()
 
   const supabase = getSupabaseClient()
