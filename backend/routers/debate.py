@@ -1,11 +1,14 @@
 # backend/routers/debate.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from models.schemas import ArgueRequest, ArgueResponse, AnalyseRequest
 from services.groq_client import chat
 import json
 from models.schemas import JudgeRequest, JudgeResponse, PvPJudgeRequest
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 def sanitize(text: str, max_len: int = 600) -> str:
@@ -54,7 +57,8 @@ Rules:
 
 
 @router.post("/argue", response_model=ArgueResponse)
-def argue(req: ArgueRequest):
+@limiter.limit("20/minute")
+def argue(req: ArgueRequest, request: Request):
     ai_side = "against" if req.user_side == "for" else "for"
 
     system = DEBATER_PROMPT.format(
@@ -98,7 +102,8 @@ Return ONLY a raw JSON object. No preamble, no markdown. Start with {{ end with 
 
 
 @router.post("/judge", response_model=JudgeResponse)
-def judge(req: JudgeRequest):
+@limiter.limit("10/minute")
+def judge(req: JudgeRequest, request: Request):
     ai_side = "against" if req.user_side == "for" else "for"
     system = JUDGE_PROMPT.format(
         topic=req.topic,
@@ -141,7 +146,8 @@ Analyse the argument and return ONLY valid JSON, no markdown, no explanation:
 
 
 @router.post("/analyse")
-def analyse(req: AnalyseRequest):
+@limiter.limit("20/minute")
+def analyse(req: AnalyseRequest, request: Request):
     system = ANALYSER_PROMPT.format(
         topic=req.topic,
         side=req.user_side,
@@ -188,7 +194,8 @@ Return ONLY a raw JSON object. No preamble, no markdown. Start with {{ end with 
 
 
 @router.post("/pvp/judge")
-def pvp_judge(req: PvPJudgeRequest):
+@limiter.limit("10/minute")
+def pvp_judge(req: PvPJudgeRequest, request: Request):
     p2_side = "against" if req.p1_side == "for" else "for"
 
     system = PVP_JUDGE_PROMPT.format(
@@ -229,7 +236,8 @@ Difficulty: Beginner (clear sides), Intermediate (nuanced), Hard (deeply contest
 
 
 @router.get("/trending")
-def trending_topics():
+@limiter.limit("30/minute")
+def trending_topics(request: Request):
     from datetime import datetime
     system = TRENDING_PROMPT.format(year=datetime.now().year)
     messages = [
