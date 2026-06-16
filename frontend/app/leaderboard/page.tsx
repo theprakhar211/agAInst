@@ -43,24 +43,35 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [myRank, setMyRank] = useState<{ rank: number; entry: LeaderboardEntry } | null>(null)
   const [loading, setLoading] = useState(true)
-  const [lastUpdated] = useState(() => new Date().toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric"
-  }))
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null)
 
-  const fetchData = useCallback(async (tab: SortBy) => {
-    setLoading(true)
+  function getTimeAgo(date: Date): string {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    if (seconds < 60) return "just now"
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}h ago`
+  }
+
+  const fetchData = useCallback(async (tab: SortBy, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
     const [board, rank] = await Promise.all([
       getLeaderboard(tab),
       user ? getMyRank(user.id, tab) : Promise.resolve(null),
     ])
     setEntries(board)
     setMyRank(rank)
-    setLoading(false)
+    setLastFetchedAt(new Date())
+    if (isRefresh) setRefreshing(false)
+    else setLoading(false)
   }, [user])
 
   useEffect(() => {
     if (authLoading) return
-    fetchData(activeTab)
+    fetchData(activeTab, false)
   }, [activeTab, authLoading, fetchData])
 
   const myEntry = myRank?.entry
@@ -108,13 +119,25 @@ export default function LeaderboardPage() {
             <div>
               <h1 className="text-3xl font-black uppercase tracking-tighter text-white">Leaderboard</h1>
               <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-700 mt-1.5">
-                Top 100 operators · Updated {lastUpdated}
+                Top 100 operators · {lastFetchedAt ? `Updated ${getTimeAgo(lastFetchedAt)}` : "Loading..."}
               </p>
             </div>
-            <button onClick={() => router.push("/")}
-              className="text-[11px] font-mono uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors">
-              ← Arena
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => fetchData(activeTab, true)}
+                disabled={refreshing || loading}
+                className="text-[11px] font-mono uppercase tracking-widest text-zinc-600 hover:text-zinc-300 border border-zinc-800 hover:border-zinc-600 px-3 py-1.5 transition-all disabled:opacity-30 flex items-center gap-1.5"
+              >
+                {refreshing
+                  ? <><div className="w-2.5 h-2.5 border border-zinc-600 border-t-zinc-300 rounded-full animate-spin" /> Refreshing</>
+                  : "↻ Refresh"
+                }
+              </button>
+              <button onClick={() => router.push("/")}
+                className="text-[11px] font-mono uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors">
+                ← Arena
+              </button>
+            </div>
           </div>
         </motion.div>
 
