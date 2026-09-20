@@ -50,13 +50,13 @@ export default function AnalysisPanel({ analysis, round }: {
         {/* Tone badge */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-500">Tone:</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${TONE_COLORS[analysis.emotional_vs_logical]}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${TONE_COLORS[analysis.emotional_vs_logical] ?? "text-zinc-400 bg-zinc-500/10 border-zinc-500/20"}`}>
             {analysis.emotional_vs_logical}
           </span>
         </div>
 
         {/* Filler phrases */}
-        {analysis.filler_phrases.length > 0 && (
+        {(analysis.filler_phrases?.length ?? 0) > 0 && (
           <div>
             <p className="text-xs text-zinc-500 mb-1">Weak phrases detected:</p>
             <div className="flex flex-wrap gap-1">
