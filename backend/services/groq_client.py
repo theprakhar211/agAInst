@@ -10,7 +10,7 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 def chat(system_prompt: str, messages: list[dict], temperature: float = 0.8, max_tokens: int = 1200) -> str:
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system_prompt},
             *messages
