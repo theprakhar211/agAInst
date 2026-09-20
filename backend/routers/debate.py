@@ -158,6 +158,16 @@ def analyse(req: AnalyseRequest, request: Request):
     for attempt in range(2):
         try:
             raw = chat(system, messages, temperature=0.3)
+            if not raw or not raw.strip():
+                # Groq refused to analyse — return a neutral fallback
+                return {
+                    "claim_strength": 5,
+                    "evidence_quality": 5,
+                    "emotional_vs_logical": "balanced",
+                    "filler_phrases": [],
+                    "one_liner_feedback": "Analysis unavailable for this topic.",
+                    "what_ai_noticed": "Unable to predict rebuttal for this topic."
+                }
             clean = raw.strip().removeprefix("```json").removeprefix(
                 "```").removesuffix("```").strip()
             data = json.loads(clean)
@@ -165,7 +175,6 @@ def analyse(req: AnalyseRequest, request: Request):
         except (json.JSONDecodeError, Exception) as e:
             if attempt == 1:
                 raise HTTPException(status_code=500, detail=str(e))
-
 
 # Fixed structural braces here to stop format string crashes!
 PVP_JUDGE_PROMPT = """You are a strict, impartial debate judge evaluating two human debaters.
