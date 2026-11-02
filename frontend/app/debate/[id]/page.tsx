@@ -71,6 +71,16 @@ export default function DebatePage() {
     history.push({ role: "user", content: userContent })
 
     try {
+      // Start the analyser right away. Don't await it, so it never blocks the debate.
+      analyse({
+        topic: session.topic,
+        user_side: session.userSide,
+        round_number: currentRound,
+        argument: userContent,
+      }).then(analysis => {
+        setAnalyses(prev => ({ ...prev, [currentRound]: analysis }))
+      }).catch(console.error)
+
       const res = await argue({
         topic: session.topic,
         user_side: session.userSide,
@@ -94,15 +104,6 @@ export default function DebatePage() {
       saveDebate(updatedSession)
       setSession(updatedSession)
       setCurrentRound(prev => prev + 1)
-
-      analyse({
-        topic: session.topic,
-        user_side: session.userSide,
-        round_number: currentRound,
-        argument: userContent,
-      }).then(analysis => {
-        setAnalyses(prev => ({ ...prev, [currentRound]: analysis }))
-      }).catch(console.error)
 
       if (currentRound === 3) {
         setTimeout(() => router.push(`/verdict/${session.id}`), 1500)
