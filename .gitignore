@@ -7,3 +7,11 @@ __pycache__/
 .next/
 .vercel
 .env*.local
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.coverage
+node_modules/
+*.patch

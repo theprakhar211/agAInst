@@ -3,12 +3,32 @@ from fastapi import APIRouter, HTTPException, Request
 from models.schemas import ArgueRequest, ArgueResponse, AnalyseRequest
 from services.groq_client import chat
 import json
-from models.schemas import JudgeRequest, JudgeResponse, PvPJudgeRequest
+import re
+from models.schemas import JudgeRequest, JudgeResponse, PvPJudgeRequest, PvPJudgeResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+
+
+# Phrases that signal an attempt to override the judge or debater instructions.
+INJECTION_PATTERNS = [
+    "ignore previous", "ignore all", "ignore your",
+    "forget your", "forget previous", "forget all",
+    "new instruction", "system prompt", "you are now",
+    "disregard", "override", "jailbreak",
+    "pretend you", "act as if", "your real",
+    "give me 10", "give full marks", "award maximum",
+]
+
+# Control characters except tab and newline (those are handled separately).
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def _has_injection(text: str) -> bool:
+    lower = text.lower()
+    return any(p in lower for p in INJECTION_PATTERNS)
 
 
 def sanitize(text: str, max_len: int = 600) -> str:
@@ -20,24 +40,51 @@ def sanitize(text: str, max_len: int = 600) -> str:
         return ""
     # Truncate to max length
     text = text[:max_len]
-    # Patterns that signal injection attempts — remove those lines
-    injection_patterns = [
-        "ignore previous", "ignore all", "ignore your",
-        "forget your", "forget previous", "forget all",
-        "new instruction", "system prompt", "you are now",
-        "disregard", "override", "jailbreak",
-        "pretend you", "act as if", "your real",
-        "give me 10", "give full marks", "award maximum",
-    ]
-    lines = text.split("\n")
+    # Replace any line that matches an injection pattern
     clean_lines = []
-    for line in lines:
-        lower = line.lower()
-        if any(p in lower for p in injection_patterns):
+    for line in text.split("\n"):
+        if _has_injection(line):
             clean_lines.append("[argument redacted]")
         else:
             clean_lines.append(line)
     return "\n".join(clean_lines).strip()
+
+
+def sanitize_inline(text: str, max_len: int = 100, fallback: str = "") -> str:
+    """
+    Single-line variant for short fields (topic, player names) that are
+    placed inside the system prompt. Removes control characters, collapses
+    whitespace and newlines, swaps double quotes for single quotes (the
+    topic sits inside quotes in the prompt), truncates, and returns
+    `fallback` if the result is empty or looks like an injection attempt.
+    """
+    if not text:
+        return fallback
+    text = _CONTROL_CHARS.sub(" ", text)
+    text = " ".join(text.split())
+    text = text.replace('"', "'")[:max_len].strip()
+    if not text or _has_injection(text):
+        return fallback
+    return text
+
+
+def resolve_pvp_winner(raw: str, p1_name: str, p2_name: str,
+                       label1: str, label2: str) -> str:
+    """
+    Map the judge's winner string back to the ORIGINAL player name sent by
+    the client (the frontend compares winner === player name exactly).
+    Raises ValueError if the judge named neither player.
+    """
+    w = " ".join((raw or "").split()).lower()
+    if w in (label1.lower(), "player 1"):
+        return p1_name
+    if w in (label2.lower(), "player 2"):
+        return p2_name
+    if w == p1_name.strip().lower():
+        return p1_name
+    if w == p2_name.strip().lower():
+        return p2_name
+    raise ValueError(f"Judge returned an unrecognised winner: {raw!r}")
 
 
 DEBATER_PROMPT = """You are arguing the {side} position on: "{topic}".
@@ -207,14 +254,23 @@ Return ONLY a raw JSON object. No preamble, no markdown. Start with {{ end with 
 def pvp_judge(req: PvPJudgeRequest, request: Request):
     p2_side = "against" if req.p1_side == "for" else "for"
 
+    # Names and topic go into the system prompt, so clean them first. The
+    # labels are only used in the prompt; the response uses the original names.
+    label1 = sanitize_inline(req.p1_name, max_len=30, fallback="Player 1")
+    label2 = sanitize_inline(req.p2_name, max_len=30, fallback="Player 2")
+    if label1.lower() == label2.lower():
+        label1, label2 = f"{label1} (Player 1)", f"{label2} (Player 2)"
+    topic = sanitize_inline(req.topic, max_len=200, fallback="[topic redacted]")
+
     system = PVP_JUDGE_PROMPT.format(
-        topic=req.topic,
-        p1_name=req.p1_name,
+        topic=topic,
+        p1_name=label1,
         p1_side=req.p1_side,
-        p2_name=req.p2_name,
+        p2_name=label2,
         p2_side=p2_side,
     )
-    messages = [{"role": m.role, "content": m.content} for m in req.history]
+    messages = [{"role": m.role, "content": sanitize(
+        m.content, max_len=800)} for m in req.history]
 
     for attempt in range(2):
         try:
@@ -222,7 +278,11 @@ def pvp_judge(req: PvPJudgeRequest, request: Request):
             # Extracted markdown strip cleanup to make it resilient against code fences
             clean = raw.strip().removeprefix("```json").removeprefix(
                 "```").removesuffix("```").strip()
-            return json.loads(clean)
+            verdict = PvPJudgeResponse(**json.loads(clean))
+            result = verdict.model_dump()
+            result["winner"] = resolve_pvp_winner(
+                verdict.winner, req.p1_name, req.p2_name, label1, label2)
+            return result
         except Exception as e:
             if attempt == 1:
                 raise HTTPException(status_code=500, detail=str(e))

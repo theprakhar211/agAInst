@@ -1,5 +1,5 @@
 # backend/models/schemas.py
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal
 
 
@@ -55,3 +55,19 @@ class PvPJudgeRequest(BaseModel):
     p2_name: str
     p1_side: Literal["for", "against"]
     history: list[Message]
+
+
+class PvPScore(BaseModel):
+    logic: int = Field(ge=1, le=10)
+    evidence: int = Field(ge=1, le=10)
+    rebuttal: int = Field(ge=1, le=10)
+    clarity: int = Field(ge=1, le=10)
+
+
+class PvPJudgeResponse(BaseModel):
+    winner: str
+    player1_scores: PvPScore
+    player2_scores: PvPScore
+    strongest_argument: str
+    reasoning: str
+    fallacies: list[str] = []
