@@ -3,13 +3,17 @@ from fastapi import APIRouter, HTTPException, Request
 from models.schemas import ArgueRequest, ArgueResponse, AnalyseRequest
 from services.groq_client import chat
 import json
+import logging
 import re
+import threading
+import time
 from models.schemas import JudgeRequest, JudgeResponse, PvPJudgeRequest, PvPJudgeResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 
 # Phrases that signal an attempt to override the judge or debater instructions.
@@ -288,37 +292,101 @@ def pvp_judge(req: PvPJudgeRequest, request: Request):
                 raise HTTPException(status_code=500, detail=str(e))
 
 
-TRENDING_PROMPT = """You are a debate topic curator. Generate 6 trending, culturally relevant debate topics that people are actively discussing right now in {year}.
+TRENDING_PROMPT = """You are a debate topic curator. Generate 6 debate topics that are widely discussed in {year}.
 
 Topics should span: Tech, Society, Ethics, Politics, Career, Science.
 
 Return ONLY valid JSON, no markdown:
 {{
   "topics": [
-    {{"text": "topic here", "category": "Tech", "difficulty": "Intermediate", "why_trending": "one sentence reason"}},
+    {{"text": "topic here", "category": "Tech", "difficulty": "Intermediate", "why_trending": "one sentence on why it is debatable"}},
     ...
   ]
 }}
 
-Make them specific and debatable — not vague. Good: "Elon Musk's leadership is hurting Tesla". Bad: "Is technology good?".
+Rules:
+- Make topics specific and debatable, not vague. Good: "Should social media platforms be legally liable for harmful user content?". Bad: "Is technology good?".
+- You cannot know current events. Do NOT cite specific news events, statistics, dates, company announcements or quotes.
+- For why_trending, write one sentence explaining the main tension between the two sides.
 Difficulty: Beginner (clear sides), Intermediate (nuanced), Hard (deeply contested)."""
+
+# Served when the model is unavailable (e.g. Groq rate limit) and nothing is cached.
+FALLBACK_TOPICS = {
+    "topics": [
+        {"text": "Should AI-generated content be clearly labelled by law?",
+         "category": "Tech", "difficulty": "Beginner",
+         "why_trending": "Transparency for readers clashes with the burden placed on creators and platforms."},
+        {"text": "Should social media platforms be legally liable for harmful content their users post?",
+         "category": "Society", "difficulty": "Intermediate",
+         "why_trending": "Protecting users conflicts with free expression and the risk of over-moderation."},
+        {"text": "Is it ethical to use gene editing to prevent inherited diseases in embryos?",
+         "category": "Ethics", "difficulty": "Hard",
+         "why_trending": "Preventing suffering is weighed against fears of inequality and unforeseen consequences."},
+        {"text": "Should voting be compulsory in democratic elections?",
+         "category": "Politics", "difficulty": "Intermediate",
+         "why_trending": "Higher turnout is weighed against individual freedom not to participate."},
+        {"text": "Is a university degree still necessary for a successful tech career?",
+         "category": "Career", "difficulty": "Beginner",
+         "why_trending": "Self-taught routes and skills tests compete with the credential signal of a degree."},
+        {"text": "Should governments prioritise space exploration over climate research funding?",
+         "category": "Science", "difficulty": "Hard",
+         "why_trending": "Long-term discovery competes with urgent, near-term environmental needs."},
+    ]
+}
+
+TRENDING_TTL_SECONDS = 15 * 60      # how long a successful result is reused
+TRENDING_FAIL_TTL_SECONDS = 30      # after a failure, do not hit the model again for this long
+TRENDING_RETRY_DELAY = 3.0          # wait before the single retry (lets Groq's per-minute window recover)
+
+_trending_cache = {"data": None, "ts": 0.0, "fail_until": 0.0}
+_trending_lock = threading.Lock()
+
+
+def reset_trending_cache() -> None:
+    """Clear cached topics (used by tests)."""
+    _trending_cache.update(data=None, ts=0.0, fail_until=0.0)
+
+
+def _trending_is_fresh() -> bool:
+    return (_trending_cache["data"] is not None
+            and time.time() - _trending_cache["ts"] < TRENDING_TTL_SECONDS)
 
 
 @router.get("/trending")
 @limiter.limit("30/minute")
 def trending_topics(request: Request):
     from datetime import datetime
-    system = TRENDING_PROMPT.format(year=datetime.now().year)
-    messages = [
-        {"role": "user", "content": "Give me 6 trending debate topics for right now."}]
 
-    for attempt in range(2):
-        try:
-            raw = chat(system, messages, temperature=0.9)
-            clean = raw.strip().removeprefix("```json").removeprefix(
-                "```").removesuffix("```").strip()
-            data = json.loads(clean)
-            return data
-        except Exception as e:
-            if attempt == 1:
-                raise HTTPException(status_code=500, detail=str(e))
+    if _trending_is_fresh():
+        return _trending_cache["data"]
+
+    # Only one request at a time calls the model; the rest wait, then reuse the result.
+    with _trending_lock:
+        if _trending_is_fresh():
+            return _trending_cache["data"]
+        if time.time() < _trending_cache["fail_until"]:
+            return _trending_cache["data"] or FALLBACK_TOPICS
+
+        system = TRENDING_PROMPT.format(year=datetime.now().year)
+        messages = [
+            {"role": "user", "content": "Give me 6 trending debate topics for right now."}]
+
+        for attempt in range(2):
+            try:
+                raw = chat(system, messages, temperature=0.9)
+                clean = raw.strip().removeprefix("```json").removeprefix(
+                    "```").removesuffix("```").strip()
+                data = json.loads(clean)
+                if not isinstance(data.get("topics"), list) or not data["topics"]:
+                    raise ValueError("Model returned no topics")
+                _trending_cache.update(data=data, ts=time.time(), fail_until=0.0)
+                return data
+            except Exception as e:
+                # Full detail goes to the server log only, never to the client.
+                logger.warning("trending attempt %d failed: %s", attempt + 1, e)
+                if attempt == 0:
+                    time.sleep(TRENDING_RETRY_DELAY)
+
+        # Both attempts failed: serve stale topics if we have them, otherwise the fixed list.
+        _trending_cache["fail_until"] = time.time() + TRENDING_FAIL_TTL_SECONDS
+        return _trending_cache["data"] or FALLBACK_TOPICS

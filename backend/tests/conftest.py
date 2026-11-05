@@ -25,7 +25,8 @@ class FakeChat:
         self.replies = []
 
     def __call__(self, system, messages, **kwargs):
-        self.calls.append({"system": system, "messages": messages, "kwargs": kwargs})
+        self.calls.append(
+            {"system": system, "messages": messages, "kwargs": kwargs})
         reply = self.replies.pop(0) if self.replies else "{}"
         if isinstance(reply, Exception):
             raise reply
@@ -37,3 +38,10 @@ def fake_chat(monkeypatch):
     fake = FakeChat()
     monkeypatch.setattr(debate, "chat", fake)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def _reset_trending_cache():
+    debate.reset_trending_cache()
+    yield
+    debate.reset_trending_cache()
