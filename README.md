@@ -140,7 +140,7 @@ Five prompts, all running `openai/gpt-oss-120b` through Groq:
 
 ## 🧪 Testing & CI
 
-- **44 pytest tests** in `backend/tests/` covering the debate endpoints, the PvP judge, input sanitising and the trending-topics fallback
+- **45+ pytest tests** in `backend/tests/` covering the debate endpoints, the PvP judge, input sanitising and the trending-topics fallback
 - The LLM is **mocked**, so tests need no API key and make no network calls
 - **GitHub Actions** (`.github/workflows/backend-tests.yml`) runs the suite on every push and pull request
 
@@ -214,7 +214,7 @@ agAInst/
     ├── routers/debate.py                     # /argue /judge /analyse /pvp/judge /trending
     ├── services/groq_client.py               # Groq SDK wrapper
     ├── models/schemas.py                     # Pydantic schemas
-    ├── tests/                                # 44 pytest tests, mocked LLM
+    ├── tests/                                # 45+ pytest tests, mocked LLM
     ├── requirements.txt
     └── requirements-dev.txt
 ```
@@ -317,7 +317,7 @@ npm run dev
 | ⚡ **Real-time sync** | Online PvP via Supabase Realtime `postgres_changes` |
 | ☁️ **Cloud + offline hybrid** | Guest localStorage → cloud sync on login with migration |
 | 🛡️ **Hardening** | Rate limiting (HTTP 429), prompt-injection sanitising, request timeouts |
-| 🧪 **Testing** | 44 pytest tests with a mocked LLM, run in GitHub Actions |
+| 🧪 **Testing** | 45+ pytest tests with a mocked LLM, run in GitHub Actions |
 | 🔧 **Fault tolerance** | Caching, single-flight model calls and a fallback list keep topic suggestions up when Groq rate-limits |
 | 🗄️ **Database automation** | `pg_cron` cleans stale rooms every 10 minutes |
 
