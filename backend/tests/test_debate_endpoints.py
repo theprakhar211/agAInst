@@ -86,3 +86,23 @@ def test_analyse_strips_code_fences(client, fake_chat):
         "topic": "t", "user_side": "for", "round_number": 1, "argument": "x",
     })
     assert res.json()["claim_strength"] == 7
+
+
+def test_argue_failure_does_not_leak_the_provider_error(client, fake_chat):
+    fake_chat.replies = [RuntimeError("secret provider detail")]
+    res = client.post("/debate/argue", json={
+        "topic": "t", "user_side": "against", "round_number": 2, "history": [],
+    })
+    assert res.status_code == 500
+    assert "secret provider detail" not in res.text
+    assert "try again" in res.json()["detail"].lower()
+
+
+def test_judge_failure_does_not_leak_parser_errors(client, fake_chat):
+    fake_chat.replies = ["no json here", "still no json"]
+    res = client.post("/debate/judge", json={
+        "topic": "t", "user_side": "for",
+        "history": [{"role": "user", "content": "a"}],
+    })
+    assert res.status_code == 500
+    assert "No JSON" not in res.text

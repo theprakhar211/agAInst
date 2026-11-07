@@ -16,6 +16,15 @@ limiter = Limiter(key_func=get_remote_address)
 logger = logging.getLogger(__name__)
 
 
+def _upstream_error(what: str, e: Exception) -> HTTPException:
+    """Log the real error server-side and return a generic 500 to the client."""
+    logger.error("%s failed: %s", what, e)
+    return HTTPException(
+        status_code=500,
+        detail="The AI service could not complete this request. Please try again.",
+    )
+
+
 # Phrases that signal an attempt to override the judge or debater instructions.
 INJECTION_PATTERNS = [
     "ignore previous", "ignore all", "ignore your",
@@ -125,7 +134,7 @@ def argue(req: ArgueRequest, request: Request):
         argument = chat(system, messages)
         return ArgueResponse(argument=argument, round_number=req.round_number)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _upstream_error("argue", e)
 
 
 JUDGE_PROMPT = """You are a strict, impartial debate judge. Your only job is to evaluate the arguments actually made in the conversation history below. Do not invent, assume, or infer arguments that were not explicitly stated.
@@ -176,7 +185,7 @@ def judge(req: JudgeRequest, request: Request):
             return JudgeResponse(**data)
         except Exception as e:
             if attempt == 1:
-                raise HTTPException(status_code=500, detail=str(e))
+                raise _upstream_error("judge", e)
 
 
 ANALYSER_PROMPT = """You are an expert debate coach analysing a single argument.
@@ -225,7 +234,7 @@ def analyse(req: AnalyseRequest, request: Request):
             return data
         except (json.JSONDecodeError, Exception) as e:
             if attempt == 1:
-                raise HTTPException(status_code=500, detail=str(e))
+                raise _upstream_error("analyse", e)
 
 # Fixed structural braces here to stop format string crashes!
 PVP_JUDGE_PROMPT = """You are a strict, impartial debate judge evaluating two human debaters.
@@ -289,7 +298,7 @@ def pvp_judge(req: PvPJudgeRequest, request: Request):
             return result
         except Exception as e:
             if attempt == 1:
-                raise HTTPException(status_code=500, detail=str(e))
+                raise _upstream_error("pvp judge", e)
 
 
 TRENDING_PROMPT = """You are a debate topic curator. Generate 6 debate topics that are widely discussed in {year}.
